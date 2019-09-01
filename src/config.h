@@ -4,8 +4,8 @@
  * with no leading or trailing whitespace. */
 
 /* Any string you like, but keep it short.
- * Used as a prefix to the hash.  Use `\xff` notation. */
-#define SPOW_DOMAIN ""
+ * Used as a prefix to the hash. */
+#define SPOW_PREFIX ""
 
 /* The difficulty of a single step.  Keep it low enough that
  * parallelizing a single step is not really advantagenous. */

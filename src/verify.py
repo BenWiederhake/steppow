@@ -28,13 +28,15 @@ def read_params(filename):
         if name in params:
             print('Error: {} defined multiple times?!'.format(name))
             return None
+        if value.startswith('"'):
+            value = 'b' + value
         value = eval(value)  # TODO: Do this without eval, please?
         params[name] = value
     return params
 
 
-def analyze_params(domain, difficulty, safety, steps):
-    print('Domain: {}'.format(domain))
+def analyze_params(prefix, difficulty, safety, steps):
+    print('Prefix: {}'.format(prefix))
     print('Difficulty: {}'.format(difficulty))
     print('Safety: {}'.format(safety))
     print('Steps: {}'.format(steps))
@@ -45,7 +47,7 @@ def analyze_params(domain, difficulty, safety, steps):
     print('Certificate byte length: {}'.format(ceil(steps * (difficulty + safety) / 8)))
 
 
-def try_verify(cert, domain, difficulty, safety, steps):
+def try_verify(cert, prefix, difficulty, safety, steps):
     if len(cert) != ceil(steps * (difficulty + safety) / 8):
         print('Bad length.')
         return False
