@@ -3,17 +3,19 @@
 > Simple, Asymmetric Proof of Work
 
 I needed a proof of work system with the following properties:
-- Asymmetric (hard for the prover, but very easy to verify)
-- Easy to implement (the roughly-60-lines C implementation is only complicated because of the generality)
-- Easy to understand (I don't want to learn about Elliptic Curves or Weaken Fiat–Shamir signatures or how Merkle trees could be used for this)
-- Free Software
+- Asymmetric
+- Easy to implement
+- Easy to understand
+- No parallelism
 - Bonus: Easy way to determine progress
+- Bonus: Free Software
 
 Simple-pow implements all of these aspects as a Proof of Concept.
 
 ## Table of Contents
 
 - [Background](#background)
+- [Theory](#theory)
 - [Install](#install)
 - [Usage](#usage)
 - [Recommendations](#recommendations)
@@ -24,6 +26,77 @@ Simple-pow implements all of these aspects as a Proof of Concept.
 - [Contribute](#contribute)
 
 ## Background
+
+### The Basic Model
+
+There are two players: The prover and the verifier.  The verifier is in a privileged position.
+The prover wants to spend effort on some problem, and then prove this work to the verifier.
+There are many systems for doing that, however none had quite the properties I was looking for.
+
+In the following, I will elaborate on what exactly I want from this method.
+
+### Asymmetric
+
+In the above explanation, there was no mention of how much work the verifier has to do.
+Some systems don't care about this aspect, and let the verifier just compute the same
+thing, and check whether the results are the same.
+
+I want a system in which the verifier has very little work to do;
+this is the case for simple-pow.
+
+### Easy to Implement
+
+No-one likes importing a big blob of code without knowing what it does.
+Also, PoW systems inherently occur in environments where different programs are
+communicating, usually across hosts, and usually written in different languages.
+
+Therefore, it should be sufficiently easy to rewrite the prover in the language of your
+choice.  This is one of the reasons why the heavy lifting is done by the
+well-trodden building block SHA256.
+
+For comparison: `src/prove.c` only contains roughly 60 lines that actually run the prover.
+The rest is comments, setup, and output.
+And even that could be reduced further by reducing generality:
+Turns out, handling arbitrary bitshifts has an impact on source code
+length (and performance, too, I guess).
+
+### Easy to Understand
+
+I don't want to learn about Elliptic Curves or Weaken Fiat–Shamir signatures or how Merkle trees could be used for this.
+
+Instead, simple-pow uses an old trick in a new flavor: A hash has to be inverted partially.
+
+### No Parallelism
+
+Partial hash inversions have been around for a long time.  There seems to
+exist a tendency such that over time, the difficulty of such systems increases
+to many, many bits.  This means that a single attempt is basically worthless;
+random variance can be really awful; and by buying more hardware, the process
+can be sped up significantly.
+
+In simple-pow, a single attempt still is not worth much, but random variance has bounds:
+By construction, the prover would need to guess the correct suffix bytes several times in a row.
+Likewise, hitting the worst-case only means that many hashes have to be computed for a single step.
+
+Finally, buying more hardware is not useful for simple-pow: Computing a certificate
+cannot be meaningfully parallelized, as each step depends on the previous.
+Computing a step cannot be meaningfully parallelized, because the expected number
+of hashes for a single step already is so low that the synchronization overhead
+might make it slower.
+
+### Bonus: Easy Way to Determine Progress
+
+A partial hash inversion gives no feedback about progress.  Either the correct
+nonce has been found, or it hasn't.
+
+In simple-pow, the prover could theoretically give feedback to the caller that "x/y"
+steps have already completed.  This should serve well as a progress indicator.
+
+### Bonus: Free Software
+
+And last but not least: You can [run, study, improve and redistribute](https://en.wikipedia.org/wiki/Free_software#Definition_and_the_Four_Freedoms) to your heart's content.
+
+## Theory
 
 FIXME
 
@@ -99,7 +172,21 @@ This wway we can easily check that good suffixes are accepted, and bad suffixes 
 
 ## Recommendations
 
-FIXME
+The Safety number only has an influence on provability, and a minor influence on the certificate size.
+Hence I recommect a Safety number of 7, as it gives an extremely small probability of impossibilty (around 2^-118),
+but does not bloat the certificate size.
+
+This leaves only two other parameters: Difficulty and Stepcount:
+
+```
+Profile	Difficulty	Stepcount	Expected Total Work (KH)	Suffix Size (Bytes)
+S	9	200	102,4	400
+M	10	500	512	1063
+L	12	1000	4096	2375
+XL	13	5000	40960	12500
+```
+
+For comparison: A reasonable upper estimate on the performance of a single core is 3000 KH/s.
 
 ## Performance
 
@@ -117,7 +204,7 @@ As a rough orientation, `prover.c` seems to compute about 500 KH/s
 (kilo hashes per second) on my machine.
 
 The prover has to submit a suffix of length `r * (d + s)` bits, where `s` is the
-"Safety" number (see Background).  This means that certificates can easily be
+"Safety" number (see [Theory](#theory)).  This means that certificates can easily be
 kept short enough for most applications.
 
 The verifier has to compute exactly `r` hashes (or less in case of an invalid certificate).
@@ -133,7 +220,9 @@ FIXME
 
 Next up are these:
 * Finish README
+* Explore other cryptograhics building blocks (could use crypt-likes?)
 * Make the prover actually usable
+- Collect Alternatives and why I didn't use them
 * Implement the prover in other languages (i.e. go, Rust, wasm, etc.)
 * Ask people for feedback on:
     * Making it more interesting for other people
