@@ -19,6 +19,7 @@ Simple-pow implements all of these aspects as a Proof of Concept.
 - [Install](#install)
 - [Usage](#usage)
 - [Recommendations](#recommendations)
+- [Security](#security)
 - [Performance](#performance)
 - [Alternatives](#alternatives)
 - [TODOs](#todos)
@@ -274,6 +275,16 @@ This isn't as nice as 2.0, but is still simpler than a bitlength not divisible b
 
 (*): Difficulty 12 can still be easy, if one chooses Safety 8, which increases the suffix size to 2500 bytes.
 
+## Security
+
+The software is provided "as is", without warranty of any kind, yadda yadda.
+
+There was no professional security audit on this yet.  I started development on this on 2019-09-01.
+
+Well, at least I haven't broken it yet.  On the other hand, I haven't broken anything yet
+(except of course assignments), so my assessment
+is [worth squat](https://www.schneier.com/blog/archives/2011/04/schneiers_law.html).
+
 ## Performance
 
 This is mostly a Proof of Concept implementation, so don't look at the numbers too
@@ -300,7 +311,13 @@ run faster than I can meaningfully measure.
 
 ## Alternatives
 
-FIXME
+- Single hash inversion: [Bitcoin](https://en.wikipedia.org/wiki/Bitcoin),
+  [Hashcash](https://en.wikipedia.org/wiki/Hashcash), other cryptocurrencies,
+- Symmetric hash inversion: [scrypt](https://en.wikipedia.org/wiki/Scrypt)-based systems
+- More complex, possibly-single-shot system: [Equihash](https://en.wikipedia.org/wiki/Equihash)
+- PoW that sees parallelism as a benetif: [Lyra2](https://en.wikipedia.org/wiki/Lyra2)
+- See also: [List of PoW functions](https://en.wikipedia.org/wiki/Proof_of_work#List_of_Proof-of-Work_functions)
+- See also: [Proof of Space](https://en.wikipedia.org/wiki/Proof_of_space)
 
 ## TODOs
 
