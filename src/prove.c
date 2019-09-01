@@ -90,8 +90,8 @@ int main() {
         }
         hashes += i_hashes;
     }
-    printf("Certificate found after %lu hashes.  Full message is:\n", hashes);
-    dump_bytes(message, SPOW_MSGBYTES);
+    printf("Certificate found after %lu hashes.  Suffix is:\n", hashes);
+    dump_bytes(message + sizeof(SPOW_PREFIX) - 1, SPOW_MSGBYTES - sizeof(SPOW_PREFIX) + 1);
     printf("\n");
     return 0;
 }
