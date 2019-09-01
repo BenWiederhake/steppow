@@ -46,6 +46,7 @@ static size_t extend_buffer(unsigned char *buf, size_t fixed_bits) {
     const size_t new_fixed_bits = fixed_bits + SPOW_DIFFICULTY + SPOW_SAFETY;
     const size_t new_fixed_bytes = (new_fixed_bits + 7) / 8;
 
+    /* Yes, it is aligned, the caller had to make sure, and we also checked it. */
     uint32_t *u32_buf = (uint32_t *)buf;
     uint32_t *u32_digest = (uint32_t *)digest;
 

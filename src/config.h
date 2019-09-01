@@ -1,10 +1,4 @@
-/* This file is included by C and parsed by python.
- * Hence, the #define's must stringtly follow the format:
- * '#define ' VARNAME ' ' NUMBER
- * with no leading or trailing whitespace. */
-
-/* Any string you like, but keep it short.
- * Used as a prefix to the hash. */
+/* Any short string you like.  Used as a prefix to the hash. */
 #define SPOW_PREFIX "Frobnicate\0"
 
 /* The difficulty of a single step.  Keep it low enough that
