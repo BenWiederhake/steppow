@@ -98,7 +98,85 @@ And last but not least: You can [run, study, improve and redistribute](https://e
 
 ## Theory
 
-FIXME
+In some other PoW systems, the prover has to find a partial hash inverse.
+The core idea of simple-pow is to force the prover to sequentially do many
+simple partial hash inverses in several steps.
+
+There are four parameters:
+- Prefix: An arbitrary but short string, used as a prefix for all hashed messages.
+  You could also call it "domain".  Can be empty; supports NUL bytes.
+- Difficulty: A number indicating the difficulty to make a single "step".
+- Safety: A number indicating the safety margin.  Note that this is about *Safety, not Security*.
+- Steps: The number of sequential iterations of this PoW system.
+  Note that this is not the total number of hashes, but rather
+  the number of puzzles (i.e. partial hash inversions).
+
+The prover begins by setting the current message to the given Prefix.
+
+In each step, the prover needs to find a nonce of bitlength Difficulty + Safety
+such that `hash'(message || nonce)` begins with Difficulty-many 0 bits, where `||` is concatenation.
+For the next step, `message || nonce` is used as the new message.
+
+`hash'` first pads the pads the message with zero bits to the next byte if bits are missing,
+and then applies SHA256.
+
+FIXME: I don't like this.  Look into `hash'(lasthash || step || nonce)`.
+
+### Simple Properties
+
+The suffix length is determined by the Difficulty, Safety, and Steps: `Steps * (Difficulty + Safety)`.
+
+The [probability of impossibility](#safety-against-impossibility) is determined
+by the Difficulty, Safety, and Steps: `< 2^(log2(Steps) - log2(e) * 2^Safety)`.
+Note that for Safety = 7, this means that the probability of impossibility is
+less than 2^-170 for any sane value of Steps.
+This means that even after 2^80 independent executions of the prover,
+the probability of seeing *any* failure is less than 2^-90.
+
+The [expected amount of work](#amount-of-work) for the prover is determined by
+the Difficulty and Steps: `Steps * 2^Difficulty`.
+
+The exact amount of work for the verifier is also determined by
+the Difficulty and Steps, but is not exponential: `Steps * Difficulty`.
+(As usual for partial-hash-inversion-style PoWs.)
+
+The suffix length is determined by the Difficulty, Safety, and Steps:
+`steps * (difficulty + safety)` bits.
+
+### Safety Against Impossibility
+
+An ideal cryptographic hash function would be [indistinguishable
+from a random function](https://en.wikipedia.org/wiki/Random_oracle),
+i.e., a function picked randomly from the space of functions that map arbitrary
+binary strings to fixed-length binary strings.
+
+This section shows that under this (Random oracle) assumption, the probability
+of the prover needing to backtrack is negligible.
+
+Let's look at a single step executed by the prover:
+The probability that a specific nonce leads to a satisficing hash is `2^-Difficulty`.
+Hence the probability that there is no such nonce is `(1 - 2^-Difficulty)^(2^(Difficulty+Safety))`
+[`=`](https://en.wikipedia.org/wiki/E_(mathematical_constant)#Inequalities)
+`e^-(2^Safety)`.  Note that this is a double exponential, and goes rapidly to 0.
+
+The probability of the prover needing to backtrack can therefore be
+[upperbounded by](https://en.wikipedia.org/wiki/Boole%27s_inequality)
+`e^-(2^Safety) * Steps`, i.e., practically never.
+
+### Amount of Work
+
+The amount of work for the prover is determined by the number of hashes that
+need to be computed.  That's why simple-pow measures work
+in terms of hash computations.
+
+If the prover follows the algorithm (i.e., repeatedly guess nonces),
+then the number of hashes follows the
+[Erlang (k=Steps, lambda=2^-Difficulty) distribution](https://en.wikipedia.org/wiki/Erlang_distribution).
+
+This means that the expected number of hash computations is `Steps * 2^Difficulty`.
+The median number of hash computations is negligibly smaller than that.
+
+FIXME: Tails?  Quantiles?
 
 ## Install
 
@@ -168,7 +246,7 @@ As you can see, the actual number of hashes is close enough to the expected
 number of hashes.
 The third part checks whether the suffic is a valid certificate,
 which errors were encountered, and whether this matches our expectation.
-This wway we can easily check that good suffixes are accepted, and bad suffixes are not.
+This way we can easily check that good suffixes are accepted, and bad suffixes are not.
 
 ## Recommendations
 
@@ -178,15 +256,23 @@ but does not bloat the certificate size.
 
 This leaves only two other parameters: Difficulty and Stepcount:
 
-```
-Profile	Difficulty	Stepcount	Expected Total Work (KH)	Suffix Size (Bytes)
-S	9	200	102,4	400
-M	10	500	512	1063
-L	12	1000	4096	2375
-XL	13	5000	40960	12500
-```
+    Profile   Difficulty   Stepcount   Expected Total Work (KH)   Suffix Size (Bytes)
+    S               9          200                102,4                   400
+    M               9         1000                512                    2000
+    L              12(*)      1000               4096                    2375 (2500)
+    XL             13         5000              40960                   12500
 
 For comparison: A reasonable upper estimate on the performance of a single core is 3000 KH/s.
+For orientation which suffix sizes are acceptable, I imagined this being sent as binary POST data.
+
+The reason I prefer a Difficulty of 9 is simple: The prover guesses nonces of length
+Difficulty + Safety, which in this case is 16 bits.
+This aligns nicely with byte boundaries, and makes implementations simpler and maybe faster.
+
+Likewise for Difficulty 13: Then the nonces have the length 20 bits, or exactly 2.5 bytes.
+This isn't as nice as 2.0, but is still simpler than a bitlength not divisible by 4.
+
+(*): Difficulty 12 can still be easy, if one chooses Safety 8, which increases the suffix size to 2500 bytes.
 
 ## Performance
 
