@@ -1,4 +1,4 @@
-# simple-pow
+# steppow
 
 > Simple, Asymmetric Proof of Work
 
@@ -10,7 +10,7 @@ I needed a proof of work system with the following properties:
 - Bonus: Easy way to determine progress
 - Bonus: Free Software
 
-Simple-pow implements all of these aspects as a Proof of Concept.
+Steppow implements all of these aspects as a Proof of Concept.
 
 ## Table of Contents
 
@@ -43,7 +43,7 @@ Some systems don't care about this aspect, and let the verifier just compute the
 thing, and check whether the results are the same.
 
 I want a system in which the verifier has very little work to do;
-this is the case for simple-pow.
+this is the case for steppow.
 
 ### Easy to Implement
 
@@ -65,7 +65,7 @@ length (and performance, too, I guess).
 
 I don't want to learn about Elliptic Curves or Weaken Fiat–Shamir signatures or how Merkle trees could be used for this.
 
-Instead, simple-pow uses an old trick in a new flavor: A hash has to be inverted partially.
+Instead, steppow uses an old trick in a new flavor: A hash has to be inverted partially.
 
 ### No Parallelism
 
@@ -75,11 +75,11 @@ to many, many bits.  This means that a single attempt is basically worthless;
 random variance can be really awful; and by buying more hardware, the process
 can be sped up significantly.
 
-In simple-pow, a single attempt still is not worth much, but random variance has bounds:
+In steppow, a single attempt still is not worth much, but random variance has bounds:
 By construction, the prover would need to guess the correct suffix bytes several times in a row.
 Likewise, hitting the worst-case only means that many hashes have to be computed for a single step.
 
-Finally, buying more hardware is not useful for simple-pow: Computing a certificate
+Finally, buying more hardware is not useful for steppow: Computing a certificate
 cannot be meaningfully parallelized, as each step depends on the previous.
 Computing a step cannot be meaningfully parallelized, because the expected number
 of hashes for a single step already is so low that the synchronization overhead
@@ -90,17 +90,23 @@ might make it slower.
 A partial hash inversion gives no feedback about progress.  Either the correct
 nonce has been found, or it hasn't.
 
-In simple-pow, the prover could theoretically give feedback to the caller that "x/y"
+In steppow, the prover could theoretically give feedback to the caller that "x/y"
 steps have already completed.  This should serve well as a progress indicator.
 
 ### Bonus: Free Software
 
 And last but not least: You can [run, study, improve and redistribute](https://en.wikipedia.org/wiki/Free_software#Definition_and_the_Four_Freedoms) to your heart's content.
 
+### Name
+
+The name comes from "Stepped Proof-of-Work".
+The backronym is "Stepped Transparent Esymmetric Practical Proof of Work"
+if you disregard orthography.
+
 ## Theory
 
 In some other PoW systems, the prover has to find a partial hash inverse.
-The core idea of simple-pow is to force the prover to sequentially do many
+The core idea of steppow is to force the prover to sequentially do many
 simple partial hash inverses in several steps.
 
 There are four parameters:
@@ -167,7 +173,7 @@ The probability of the prover needing to backtrack can therefore be
 ### Amount of Work
 
 The amount of work for the prover is determined by the number of hashes that
-need to be computed.  That's why simple-pow measures work
+need to be computed.  That's why steppow measures work
 in terms of hash computations.
 
 If the prover follows the algorithm (i.e., repeatedly guess nonces),
@@ -334,7 +340,7 @@ Next up are these:
 ## NOTDOs
 
 Here are some things this project will definitely not support:
-* Zero-knowledge anything.  This field of work is awesome, but not in scope for this little *simple* PoW project.
+* Zero-knowledge anything.  This field of work is awesome, but not in scope for this little PoW project.
 * Anything sophisticated with the prefix.  The idea is that the prefix is already agreed-upon.
 
 I'm not sure how I feel about super-hyper-optimizations using assembler or SIMD-type things.
