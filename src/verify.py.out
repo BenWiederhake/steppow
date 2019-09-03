@@ -1,0 +1,298 @@
+========================================
+Checking cert #0 (40 bytes)
+Initial hash: b'\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01'
+Token: b'\x02\x02\x02\x02\x02\x02\x02\x02'
+Difficulty: 8
+Safety: 8
+Steps: 20
+--------------------
+Bits per step: 16
+Probability of impossibility: < 2^(-251.67807190511263)
+E[num hashes]: 5120
+Actual num hashes: 24805
+Certificate byte length: 40
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #1 (10 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 800
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-118.35614381022528)
+E[num hashes]: 102400
+Actual num hashes: -1
+Certificate byte length: 1400
+--------------------
+Bad length.
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #2 (1400 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 800
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-118.35614381022528)
+E[num hashes]: 102400
+Actual num hashes: -1
+Certificate byte length: 1400
+--------------------
+Failed at step 0, with buf bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00?\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #3 (58 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: -1
+Certificate byte length: 58
+--------------------
+Bad padding.
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #4 (58 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: 3061
+Certificate byte length: 58
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #5 (58 bytes)
+Initial hash: b'\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: -1
+Certificate byte length: 58
+--------------------
+Failed at step 0, with buf bytearray(b'\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\xa6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #6 (58 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x01\x01\x01\x01\x01\x01\x01\x01'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: -1
+Certificate byte length: 58
+--------------------
+Failed at step 0, with buf bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xa6\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #7 (58 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: -1
+Certificate byte length: 58
+--------------------
+Failed at step 26, with buf bytearray(b'\x01\xbd>\xbe\xf4k\xec\xa7\xf4\x89\x99\xccXx\xf7h3SzP\x06\xbe{v5\xba\xa5{C\xa8\x1b\x1e\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1a')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #8 (58 bytes)
+Initial hash: b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+Token: b'\x00\x00\x00\x00\x00\x00\x00\x00'
+Difficulty: 7
+Safety: 7
+Steps: 33
+--------------------
+Bits per step: 14
+Probability of impossibility: < 2^(-122.95560588064154)
+E[num hashes]: 4224
+Actual num hashes: -1
+Certificate byte length: 58
+--------------------
+Bad padding.
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #9 (188 bytes)
+Initial hash: b'ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ'
+Token: b'ZZZZZZZZ'
+Difficulty: 8
+Safety: 7
+Steps: 100
+--------------------
+Bits per step: 15
+Probability of impossibility: < 2^(-121.35614381022528)
+E[num hashes]: 25600
+Actual num hashes: 23244
+Certificate byte length: 188
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #10 (290 bytes)
+Initial hash: b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f'
+Token: b'Hi mate!'
+Difficulty: 12
+Safety: 7
+Steps: 122
+--------------------
+Bits per step: 19
+Probability of impossibility: < 2^(-121.06926266243711)
+E[num hashes]: 499712
+Actual num hashes: 598812
+Certificate byte length: 290
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #11 (290 bytes)
+Initial hash: b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f'
+Token: b'Hi mate?'
+Difficulty: 12
+Safety: 7
+Steps: 122
+--------------------
+Bits per step: 19
+Probability of impossibility: < 2^(-121.06926266243711)
+E[num hashes]: 499712
+Actual num hashes: -1
+Certificate byte length: 290
+--------------------
+Failed at step 0, with buf bytearray(b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x00\x00\x00\x00\x00\x00\x03|Hi mate?\x00\x00\x00\x00')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #12 (290 bytes)
+Initial hash: b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f'
+Token: b'Hi mate!'
+Difficulty: 11
+Safety: 8
+Steps: 122
+--------------------
+Bits per step: 19
+Probability of impossibility: < 2^(-249.06926266243713)
+E[num hashes]: 249856
+Actual num hashes: 598812
+Certificate byte length: 290
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #13 (290 bytes)
+Initial hash: b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f'
+Token: b'Hi mate!'
+Difficulty: 13
+Safety: 6
+Steps: 122
+--------------------
+Bits per step: 19
+Probability of impossibility: < 2^(-57.06926266243711)
+E[num hashes]: 999424
+Actual num hashes: -1
+Certificate byte length: 290
+--------------------
+Failed at step 0, with buf bytearray(b'\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x00\x00\x00\x00\x00\x00\x03|Hi mate!\x00\x00\x00\x00')
+Valid: False
+Matches expectation: True
+========================================
+Checking cert #14 (400 bytes)
+Initial hash: b'abcdefghijklmnopqrstuvwxyz123456'
+Token: b'12345678'
+Difficulty: 9
+Safety: 7
+Steps: 200
+--------------------
+Bits per step: 16
+Probability of impossibility: < 2^(-120.35614381022528)
+E[num hashes]: 102400
+Actual num hashes: 109895
+Certificate byte length: 400
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #15 (480 bytes)
+Initial hash: b'abcdefghijklmnopqrstuvwxyz123456'
+Token: b'87654321'
+Difficulty: 17
+Safety: 7
+Steps: 160
+--------------------
+Bits per step: 24
+Probability of impossibility: < 2^(-120.67807190511263)
+E[num hashes]: 20971520
+Actual num hashes: 23896052
+Certificate byte length: 480
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #16 (40 bytes)
+Initial hash: b'abcdefghijklmnopqrstuvwxyz123456'
+Token: b'la8aW4zP'
+Difficulty: 24
+Safety: 8
+Steps: 10
+--------------------
+Bits per step: 32
+Probability of impossibility: < 2^(-252.67807190511263)
+E[num hashes]: 167772160
+Actual num hashes: 141001879
+Certificate byte length: 40
+--------------------
+Valid: True
+Matches expectation: True
+========================================
+Checking cert #17 (40 bytes)
+Initial hash: b'abcdefghijklmnopqrstuvwxyz123456'
+Token: b'la8aW4zP'
+Difficulty: 24
+Safety: 8
+Steps: 10
+--------------------
+Bits per step: 32
+Probability of impossibility: < 2^(-252.67807190511263)
+E[num hashes]: 167772160
+Actual num hashes: -1
+Certificate byte length: 40
+--------------------
+Failed at step 9, with buf bytearray(b'\x00\x00\x00\xa4\xa5\x8a~\x82\x83u\x88*0\xff\xd5!9\x97p\xdbJ}P\x06\x1c\x0f\x1d\xd4\x88\xe9\x9cM\x00\x00\x00\x00\x00\xbe(Dla8aW4zP\x00\x00\x00\t')
+Valid: False
+Matches expectation: True

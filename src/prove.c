@@ -73,15 +73,15 @@ static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *las
     memmove(hashbuf + SPOW_H_LAST_HASH_OFF, last_hash, SPOW_H_LAST_HASH_LEN);
     /* Skip nonce for now. */
     memmove(hashbuf + SPOW_H_TOKEN_OFF, token, SPOW_H_TOKEN_LEN);
-    const uint64_t step_le = pe_htobe64(step);
-    memmove(hashbuf + SPOW_H_STEP_OFF, &step_le, SPOW_H_STEP_LEN);
+    const uint32_t step_be = pe_htobe32(step);
+    memmove(hashbuf + SPOW_H_STEP_OFF, &step_be, SPOW_H_STEP_LEN);
 
     uint64_t *u64_hashbuf = (uint64_t *)hashbuf;
     uint64_t nonce = 0;
     const uint32_t difficulty_mask = pe_htobe32(SPOW_DIFFICULTY_MASK);
     for (; ; ++nonce) {
         /* Write nonce. */
-        u64_hashbuf[SPOW_H_NONCE_OFF_U64] = pe_htole64(nonce);
+        u64_hashbuf[SPOW_H_NONCE_OFF_U64] = pe_htobe64(nonce);
         /* Compute digest */
         /* We use u64_hashbuf so that the compiler definitely sees the
          * read *and* writes on it, even when it assumes
