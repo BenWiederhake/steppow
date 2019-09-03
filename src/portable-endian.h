@@ -29,9 +29,26 @@
  * There is no configuration, no macro-flags, no magic going on.
  * It should "just work".
  *
- * In case you have a *really* weird system that doesn't support some of the
- * types uint16_t, uint32_t, or uint64_t, just define the appropriate guard,
- * for example if there's no uint64_t:
+ * Sufficiently advanced compilers should be able to optimize these functions
+ * down to no-ops and byteswaps:
+ * https://godbolt.org/z/Fs9-c4
+ * Even if not: the code is branch-free and operates only on the stack,
+ * without reading a global or something.
+ *
+ * As this library has no includes other than stdint.h, it is extremely
+ * portable.  Managing which platform/compiler/environment defines which
+ * macros in which files is a mess:
+ * https://github.com/BenWiederhake/portable-endian.h/blob/0ff2b6574b56bb08efcf01311f22c177b744da1d/portable_endian.h
+ * This library does without, and might even work on a potato.
+ *
+ * Finally, readability: Apart from a bit of macro-noise for customizability,
+ * there is nothing fancy going on.  Each function writes chars and reads some
+ * uintX_t, or writes a uintX_t and reads some chars.  That's it.
+ * It doesn't get more readable than that.
+ *
+ * In case you have a weird system that doesn't support some of the
+ * types uint16_t, uint32_t, or uint64_t, just define the appropriate guard.
+ * For example if there's no uint64_t, or you want to skip those functions:
  *   #define PORTABLE_ENDIAN_NO_UINT_64_T
  *
  * In case you have a *really* weird system where the compiler doesn't know how
@@ -40,9 +57,9 @@
  * PORTABLE_ENDIAN_MODIFIERS (except on C89):
  *   #define PORTABLE_ENDIAN_MODIFIERS static inline
  *
- * In case you have a *really* weird system where the above trick doesn't quite
- * work or doesn't get properly inlined, do the following in exactly one
- * compilation unit:
+ * In case you have a *seriously* weird system where the above trick doesn't
+ * quite work or doesn't get properly inlined, write the following in
+ * exactly *one* compilation unit:
  *   #define PORTABLE_ENDIAN_MODIFIERS / * nothing * /
  * and in all other compilation units:
  *   #define PORTABLE_ENDIAN_MODIFIERS extern
@@ -50,8 +67,6 @@
  * This way, portable-endian behaves mostly as if it's a library against which
  * you statically link, without the hassle of having to deal with any
  * compilation flags.
- *
- * See also: https://github.com/BenWiederhake/portable-endian
  */
 
 #ifndef PORTABLE_ENDIAN_PORTABLE_ENDIAN_H_
@@ -60,13 +75,19 @@
 #include <stdint.h>
 
 
+
 /* To differentiate this from different forks, this is the specific flavor of
- * the project. Please *do* change this string when forking. */
+ * the project. Please *do* change this string when forking.
+ * The original flavor "VIPERS_BEGAN_HOBBLE" is hosted here:
+ * https://github.com/BenWiederhake/portable-endian/
+ * The words were chosen by randomly picking from the dictionary.
+ * I never actually observed that vipers began to hobble. */
 #define PORTABLE_ENDIAN_FLAVOR "VIPERS_BEGAN_HOBBLE"
 
 #ifndef PORTABLE_ENDIAN_MODIFIERS
 #define PORTABLE_ENDIAN_MODIFIERS static
 #endif /* PORTABLE_ENDIAN_MODIFIERS */
+
 
 
 #ifndef PORTABLE_ENDIAN_NO_UINT_16_T
@@ -126,6 +147,7 @@ PORTABLE_ENDIAN_MODIFIERS uint16_t pe_htole16(uint16_t v) {
 #endif /* PORTABLE_ENDIAN_NO_UINT_16_T */
 
 
+
 #ifndef PORTABLE_ENDIAN_NO_UINT_32_T
 PORTABLE_ENDIAN_MODIFIERS uint32_t pe_be32toh(uint32_t v);
 PORTABLE_ENDIAN_MODIFIERS uint32_t pe_htobe32(uint32_t v);
@@ -179,6 +201,7 @@ PORTABLE_ENDIAN_MODIFIERS uint32_t pe_htole32(uint32_t v) {
 }
 #endif /* PORTABLE_ENDIAN_DECLS_ONLY */
 #endif /* PORTABLE_ENDIAN_NO_UINT_32_T */
+
 
 
 #ifndef PORTABLE_ENDIAN_NO_UINT_64_T
@@ -255,6 +278,7 @@ PORTABLE_ENDIAN_MODIFIERS uint64_t pe_htole64(uint64_t v) {
 }
 #endif /* PORTABLE_ENDIAN_DECLS_ONLY */
 #endif /* PORTABLE_ENDIAN_NO_UINT_64_T */
+
 
 
 #endif /* PORTABLE_ENDIAN_PORTABLE_ENDIAN_H_ */
