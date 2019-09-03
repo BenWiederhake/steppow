@@ -141,7 +141,7 @@ The number `num_steps` is encoded as a Big Endian 4-byte integer.
 
 ### Simple Properties
 
-The suffix length is determined by the Difficulty, Safety, and Steps: `Steps * (Difficulty + Safety)`.
+The certificate length is determined by the Difficulty, Safety, and Steps: `Steps * (Difficulty + Safety)`.
 
 The [probability of impossibility](#safety-against-impossibility) is determined
 by the Difficulty, Safety, and Steps: `< 2^(log2(Steps) - log2(e) * 2^Safety)`.
@@ -157,7 +157,7 @@ The exact amount of work for the verifier is also determined by
 the Difficulty and Steps, but is not exponential: `Steps * Difficulty`.
 (As usual for partial-hash-inversion-style PoWs.)
 
-The suffix length is determined by the Difficulty, Safety, and Steps:
+The certificate length is determined by the Difficulty, Safety, and Steps:
 `steps * (difficulty + safety)` bits.
 
 ### Safety Against Impossibility
@@ -193,11 +193,21 @@ then the number of hashes follows the
 This means that the expected number of hash computations is `Steps * 2^Difficulty`.
 The median number of hash computations is negligibly smaller than that.
 
-FIXME: Tails?  Quantiles?
+TODO: Figure out bounds on the tail.  Specifically, what are the 0.1%, 1%, 10%,
+90%, 99%, and 99.9% quantiles of the number of hash computations?
 
 ## Install
 
-FIXME.  pip?
+This is only a Proof of Concept thing.  First I want to get feedback on
+whether this is actually a good idea, and maybe fix other issues,
+before I implement it in a variety of languages.
+
+This is why steppow cannot be installed yet, in any way.
+
+The dependencies of steppow are simple:
+- The python implementation of `verify` needs python3 (duh).
+- The C implementation of `prove` needs a C compiler (at least clang and gcc work),
+  and gcrypt (package name on Debian: `libgcrypt20-dev`).
 
 ## Usage
 
@@ -279,11 +289,11 @@ but does not bloat the certificate size.
 
 This leaves the two other parameters Difficulty and Stepcount:
 
-    Profile   Difficulty   Stepcount   Expected Total Work (KH)   Suffix Size (Bytes)
-    S               9          200                102,4                   400
-    M               9         1000                512                    2000
-    L              12(*)      1000               4096                    2375 (2500)
-    XL             13         5000              40960                   12500
+    Profile   Difficulty   Stepcount   Expected Total Work (KH)   Certificate Size (Bytes)
+    S               9          200                102,4                      400
+    M               9         1000                512                       2000
+    L              12(*)      1000               4096                       2375 (2500)
+    XL             13         5000              40960                      12500
 
 For comparison: A reasonable upper estimate on the performance of a single core is 3000 KH/s,
 a reasonable lower bound seems to be 100 KH/s.
@@ -383,7 +393,7 @@ I'm not going to analyze how well this can be done.
 As a rough orientation, `prover.c` seems to compute about 500 KH/s
 (kilo hashes per second) on my machine.
 
-The prover has to submit a suffix of length `r * (d + s)` bits, where `s` is the
+The prover has to submit a certificate of length `r * (d + s)` bits, where `s` is the
 "Safety" number (see [Theory](#theory)).  This means that certificates can easily be
 kept short enough for most applications.
 
@@ -405,21 +415,29 @@ run faster than I can meaningfully measure.
 ## TODOs
 
 Next up are these:
-* Finish README
-  * Consider reordering
-* Make the prover actually usable
-* Implement the prover in other languages (i.e. go, Rust, wasm, etc.)
-* Implement the verifier in other languages (i.e. go, Rust, wasm, etc.)
 * Ask people for feedback on:
     * Making it more interesting for other people
     * Better comparison with other projects
+* Consider reordering README sections
+* Make the prover actually usable
+* Implement the prover in other languages (i.e. go, Rust, wasm, etc.)
+* Implement the verifier in other languages (i.e. go, Rust, wasm, etc.)
+* Figure out Erlang distribution tails (see above)
 
 ## NOTDOs
 
 Here are some things this project will definitely not support:
 * Zero-knowledge anything.  This field of work is awesome, but not in scope for this little PoW project.
-* Anything sophisticated with the prefix.  The idea is that the prefix is already agreed-upon.
+* Anything sophisticated with the Initial Hash or Token.
+  The idea is that the parameters are already agreed-upon.
 * Compression: See [Design Considerations](#design-considerations)
+* Any other way to deal with endianness.  Trying to do it with
+  [portable includes](https://github.com/BenWiederhake/portable-endian.h/blob/0ff2b6574b56bb08efcf01311f22c177b744da1d/portable_endian.h)
+  is a mess.  Doing it with
+  [shifts and bitmasks](https://github.com/BenWiederhake/portable-endian/blob/master/portable-endian.h)
+  compiles down to
+  [noop and byteswap](https://godbolt.org/z/Fs9-c4)
+  in sufficiently advanced compilers.
 
 I'm not sure how I feel about super-hyper-optimizations using assembler or SIMD-type things.
 For now, I will not focus on it, but a PR adding for example a `prover-simd.c` would be welcome.
