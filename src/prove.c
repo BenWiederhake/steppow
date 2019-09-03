@@ -14,19 +14,44 @@
 #include <stddef.h> /* size_t */
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h> /* memcpy / memmove */
 
 #define PORTABLE_ENDIAN_NO_UINT_16_T
 
-#include "config.h"
+#include "prove-config.h"
 #include "portable-endian.h"
 
+/* I don't think this will ever change.  But just in case.
+ * However, you may want to choose a hash which has block size at least
+ * SPOW_HASHBYTES + 1 + 8, because then it probably fits in a block. */
+#define SPOW_HASHALGO GCRY_MD_SHA256
+
+#define SPOW_MD_SIZE (256 / 8)
 #define SPOW_CERTBYTES ((SPOW_STEPS * (SPOW_DIFFICULTY + SPOW_SAFETY) + 7) / 8)
-#define SPOW_MSGBYTES (SPOW_CERTBYTES + sizeof(SPOW_PREFIX) - 1)
-#define SPOW_MAXNONCE ((1UL << (SPOW_DIFFICULTY + SPOW_SAFETY)) - 1)
+/* "1UL << (SPOW_DIFFICULTY + SPOW_SAFETY)" fails when it's 64. */
+#define SPOW_MAXNONCE (((1UL << SPOW_DIFFICULTY) << SPOW_SAFETY) - 1)
 #define SPOW_DIFFICULTY_MASK (((1UL << SPOW_DIFFICULTY) - 1) << (32 - SPOW_DIFFICULTY))
 
-#define SPOW_HASH GCRY_MD_SHA256
-#define SPOW_MD_SIZE (256 / 8)
+/* hashbuf = last_hash || nonce || token || step */
+#define SPOW_H_LAST_HASH_OFF (0)
+#define SPOW_H_LAST_HASH_LEN (SPOW_MD_SIZE)
+#define SPOW_H_NONCE_OFF (SPOW_H_LAST_HASH_OFF + SPOW_H_LAST_HASH_LEN)
+#define SPOW_H_NONCE_LEN (8)
+#define SPOW_H_TOKEN_OFF (SPOW_H_NONCE_OFF + SPOW_H_NONCE_LEN)
+#define SPOW_H_TOKEN_LEN (8)
+#define SPOW_H_STEP_OFF (SPOW_H_TOKEN_OFF + SPOW_H_TOKEN_LEN)
+#define SPOW_H_STEP_LEN (4)
+#define SPOW_HASHBYTES (SPOW_H_STEP_OFF + SPOW_H_STEP_LEN)
+#define SPOW_H_NONCE_OFF_U64 (SPOW_H_NONCE_OFF / 8)
+
+typedef char assert_SPOW_INITHASH_length[
+    (sizeof(SPOW_INITHASH) == (SPOW_MD_SIZE + 1)) ? 1 : -1];
+typedef char assert_nonce_fits[
+    (SPOW_DIFFICULTY + SPOW_SAFETY <= 64) ? 1 : -1];
+typedef char assert_SPOW_HOFF_U64_consistency[
+    (SPOW_H_NONCE_OFF_U64 * 8 == SPOW_H_NONCE_OFF) ? 1 : -1];
+typedef char assert_SPOW_HBYTES_consistency[
+    (SPOW_HASHBYTES == SPOW_H_LAST_HASH_LEN + SPOW_H_STEP_LEN + SPOW_H_TOKEN_LEN + SPOW_H_NONCE_LEN) ? 1 : -1];
 
 static void dump_bytes(unsigned char *buf, size_t num_bytes) {
     for (size_t i = 0; i < num_bytes; ++i) {
@@ -34,65 +59,86 @@ static void dump_bytes(unsigned char *buf, size_t num_bytes) {
     }
 }
 
-static size_t extend_buffer(unsigned char *buf, size_t fixed_bits) {
+static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *last_hash, const unsigned char *token) {
     /* Check alignment: */
-    assert((((intptr_t)buf) & 0x7) == 0);
-    /* Check whether the nonce is always fully captured by a window of two u32s: */
-    assert(SPOW_DIFFICULTY + SPOW_SAFETY <= 33);
+    assert((((intptr_t)last_hash) & 0x3) == 0);
+    /* Check whether it fits in one block.  This is not a requirement,
+     * but why would you need such a high Difficulty/Safety? */
+    assert(SPOW_HASHBYTES <= 55);
+    /* This implementation can't handle too large nonces: */
+    assert(SPOW_DIFFICULTY + SPOW_SAFETY <= 57);
 
+    /* hashbuf = last_hash || nonce || token || step*/
+    unsigned char hashbuf[SPOW_HASHBYTES] = "";
+    memmove(hashbuf + SPOW_H_LAST_HASH_OFF, last_hash, SPOW_H_LAST_HASH_LEN);
+    /* Skip nonce for now. */
+    memmove(hashbuf + SPOW_H_TOKEN_OFF, token, SPOW_H_TOKEN_LEN);
+    const uint64_t step_le = pe_htobe64(step);
+    memmove(hashbuf + SPOW_H_STEP_OFF, &step_le, SPOW_H_STEP_LEN);
+
+    uint64_t *u64_hashbuf = (uint64_t *)hashbuf;
+    uint64_t nonce = 0;
     const uint32_t difficulty_mask = pe_htobe32(SPOW_DIFFICULTY_MASK);
-
-    unsigned char digest[SPOW_MD_SIZE];
-    const size_t new_fixed_bits = fixed_bits + SPOW_DIFFICULTY + SPOW_SAFETY;
-    const size_t new_fixed_bytes = (new_fixed_bits + 7) / 8;
-
-    /* Yes, it is aligned, the caller had to make sure, and we also checked it. */
-    uint32_t *u32_buf = (uint32_t *)buf;
-    uint32_t *u32_digest = (uint32_t *)digest;
-
-    const int nonce_mask_shift = 64 - (SPOW_DIFFICULTY + SPOW_SAFETY) - (fixed_bits % 32);
-    const uint32_t nonce_mask_l = pe_htobe32((SPOW_MAXNONCE << nonce_mask_shift) >> 32);
-    const uint32_t nonce_mask_r = pe_htobe32((SPOW_MAXNONCE << nonce_mask_shift) & 0xFFFFFFFF);
-    const size_t nonce_index_start = fixed_bits / 32;
-    /* printf("%4lu fixed, start at #%3lu, nonce shift %2d, orig nonce mask is 0x%016lX, partials are now 0x%08X and 0x%08X\n",
-        fixed_bits, nonce_index_start, nonce_mask_shift, SPOW_MAXNONCE << nonce_mask_shift, nonce_mask_l, nonce_mask_r); */
-    for (uint64_t nonce = 42; nonce <= SPOW_MAXNONCE; ++nonce) {
-        /* Clear old nonce */
-        u32_buf[nonce_index_start] &= ~nonce_mask_l;
-        u32_buf[nonce_index_start + 1] &= ~nonce_mask_r;
-        /* Write nonce */
-        const uint32_t write_l = pe_htobe32((nonce << nonce_mask_shift) >> 32);
-        const uint32_t write_r = pe_htobe32((nonce << nonce_mask_shift) & 0xFFFFFFFF);
-        u32_buf[nonce_index_start] |= write_l;
-        u32_buf[nonce_index_start + 1] |= write_r;
+    for (; ; ++nonce) {
+        /* Write nonce. */
+        u64_hashbuf[SPOW_H_NONCE_OFF_U64] = pe_htole64(nonce);
         /* Compute digest */
-        gcry_md_hash_buffer(SPOW_HASH, digest, buf, new_fixed_bytes);
+        /* We use u64_hashbuf so that the compiler definitely sees the
+         * read *and* writes on it, even when it assumes
+         * strict non-aliasing (which we violate). */
+        gcry_md_hash_buffer(SPOW_HASHALGO, last_hash,
+            (unsigned char *)u64_hashbuf, SPOW_HASHBYTES);
         /* Are we done yet? */
-        uint32_t relevant_digest = u32_digest[0] & difficulty_mask;
+        uint32_t relevant_digest = ((uint32_t *)last_hash)[0] & difficulty_mask;
         if (relevant_digest == 0) {
             /* All required-zero bits are zero: */
-            return nonce + 1;
+            break;
+        }
+        if (nonce == SPOW_MAXNONCE) {
+            /* The impossible happened: Backtracking needed, but not implemented.
+             * See README.md, topics "Safety" and "Recommendations". */
+            return 0;
         }
     }
-    return 0;
+
+    const uint32_t fixed_bits = (SPOW_DIFFICULTY + SPOW_SAFETY) * step;
+    const uint64_t aligned_nonce = nonce << (64 - (SPOW_DIFFICULTY + SPOW_SAFETY + fixed_bits % 8));
+    /* bit machine-i goes into byte machine-(i//8) */
+    const uint32_t first_touched_byte = (fixed_bits) / 8;
+    const uint32_t last_touched_byte = (fixed_bits + (SPOW_DIFFICULTY + SPOW_SAFETY) - 1) / 8;
+    const uint32_t touch_bytes = last_touched_byte - first_touched_byte + 1;
+    assert(touch_bytes * 8 <= SPOW_DIFFICULTY + SPOW_SAFETY + 14);
+    assert(touch_bytes >= (SPOW_DIFFICULTY + SPOW_SAFETY + 7) / 8);
+    assert(touch_bytes == (SPOW_DIFFICULTY + SPOW_SAFETY + fixed_bits % 8 + 7) / 8);
+    assert(touch_bytes <= 8);
+    for (uint32_t i = 0; i < touch_bytes; ++i) {
+        cert[first_touched_byte + i] |= (aligned_nonce >> (64 - (i + 1) * 8)) & 0xFF;
+    }
+
+    return nonce + 1;
 }
 
 int main() {
-    /* Additional 4-1 bytes for overshoot accesses. */
-    unsigned char message[SPOW_MSGBYTES + 3] = SPOW_PREFIX;
+    /* Provide space for safe overwriting. */
+    unsigned char certificate[SPOW_CERTBYTES + 7] = "";
+    const unsigned char token[8] = SPOW_TOKEN;
+    unsigned char last_hash[SPOW_MD_SIZE] = SPOW_INITHASH;
     size_t hashes = 0;
-    for (size_t i = 0; i < SPOW_STEPS; ++i) {
-        size_t fixed_bits = (sizeof(SPOW_PREFIX) - 1) * 8 + (SPOW_DIFFICULTY + SPOW_SAFETY) * i;
-        size_t i_hashes = extend_buffer(message, fixed_bits);
-        if (i_hashes == 0) {
-            printf("Failed in step %lu, would need to backtrack!\n", i);
-            // However, this is sufficiently unlikely.
+    for (uint32_t step = 0; step < SPOW_STEPS; ++step) {
+        size_t step_hashes = extend_cert(certificate, step, last_hash, token);
+
+        if (step_hashes == 0) {
+            printf("Failed in step %u, would need to backtrack!\n", step);
+            /* However, this is sufficiently unlikely.
+             * See README.md, topics "Safety" and "Recommendations". */
             return 1;
         }
-        hashes += i_hashes;
+        /* Theoretically you can overflow here.
+         * Practically, this costs 2^64 hash computations. See you in 2080. */
+        hashes += step_hashes;
     }
-    printf("Certificate found after %lu hashes.  Suffix is:\n", hashes);
-    dump_bytes(message + sizeof(SPOW_PREFIX) - 1, SPOW_MSGBYTES - sizeof(SPOW_PREFIX) + 1);
+    printf("Certificate found after %lu hashes:\n", hashes);
+    dump_bytes(certificate, SPOW_CERTBYTES);
     printf("\n");
     return 0;
 }
