@@ -1,5 +1,5 @@
 /* Compile:
- * clang -Weverything -O3 -march=native src/prove.c -lgcrypt -o bin/prove
+ * clang -Wall -O3 -march=native src/prove.c -lgcrypt -o bin/prove
  * Run:
  * ./bin/prove
  * Yay. */
