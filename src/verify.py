@@ -57,7 +57,6 @@ HASHBYTES = H_STEP_OFF + H_STEP_LEN
 assert HASHBYTES == H_LAST_HASH_LEN + H_STEP_LEN + H_TOKEN_LEN + H_NONCE_LEN
 
 
-
 def analyze_params(init_hash, token, difficulty, safety, steps, hashes_actual):
     print('Initial hash: {}'.format(init_hash))
     print('Token: {}'.format(token))
@@ -69,16 +68,19 @@ def analyze_params(init_hash, token, difficulty, safety, steps, hashes_actual):
     assert difficulty + safety <= 64
     print('--------------------')
     print('Bits per step: {}'.format(difficulty + safety))
-    print('Probability of impossibility: < 2^({})'.format(log2(steps) - 2 ** safety))
+    print('Probability of impossibility: < 2^({})'.format(
+        log2(steps) - 2 ** safety))
     print('E[num hashes]: {}'.format(steps * (2 ** difficulty)))
     print('Actual num hashes: {}'.format(hashes_actual))
-    print('Certificate byte length: {}'.format(ceil(steps * (difficulty + safety) / 8)))
+    print('Certificate byte length: {}'.format(
+        ceil(steps * (difficulty + safety) / 8)))
     print('--------------------')
 
 
 def check_difficulty(buf, difficulty):
     digest = sha256(buf).digest()
-    return digest, all(digest[i // 8] & (1 << (7 - i % 8)) == 0 for i in range(difficulty))
+    return digest, all(digest[i // 8] & (1 << (7 - i % 8)) == 0
+                       for i in range(difficulty))
 
 
 def extract_nonce(cert, cert_off, bits):
@@ -133,7 +135,7 @@ def run_on(init_hash, token, difficulty, safety, steps, certificate, hashes_actu
 
 
 def run_all(certificates):
-    for i, args in enumerate(TEST_CERTS):
+    for i, args in enumerate(certificates):
         print('========================================')
         print('Checking cert #{} ({} bytes)'.format(i, len(args[5])))
         run_on(*args)

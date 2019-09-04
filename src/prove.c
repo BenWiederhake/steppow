@@ -56,7 +56,7 @@ typedef char assert_SPOW_HOFF_U64_consistency[
 typedef char assert_SPOW_HBYTES_consistency[
     (SPOW_HASHBYTES == SPOW_H_LAST_HASH_LEN + SPOW_H_STEP_LEN + SPOW_H_TOKEN_LEN + SPOW_H_NONCE_LEN) ? 1 : -1];
 typedef char assert_SPOW_DIFFICULTY_limit[
-    (((SPOW_DIFFICULTY) <= 32) ? 1 : -1];
+    ((SPOW_DIFFICULTY) <= 32) ? 1 : -1];
 
 static void dump_bytes(unsigned char *buf, size_t num_bytes) {
     for (size_t i = 0; i < num_bytes; ++i) {
