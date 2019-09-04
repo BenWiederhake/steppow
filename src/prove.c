@@ -26,32 +26,37 @@
  * SPOW_HASHBYTES + 1 + 8, because then it probably fits in a block. */
 #define SPOW_HASHALGO GCRY_MD_SHA256
 
+/* Policy: Don't trust the macros defined in prove-config.h,
+ * but *do* trust the macros defined here. */
 #define SPOW_MD_SIZE (256 / 8)
-#define SPOW_CERTBYTES ((SPOW_STEPS * (SPOW_DIFFICULTY + SPOW_SAFETY) + 7) / 8)
-/* "1UL << (SPOW_DIFFICULTY + SPOW_SAFETY)" fails when it's 64. */
-#define SPOW_MAXNONCE (((1UL << SPOW_DIFFICULTY) << SPOW_SAFETY) - 1)
-#define SPOW_DIFFICULTY_MASK (((1UL << SPOW_DIFFICULTY) - 1) << (32 - SPOW_DIFFICULTY))
+#define SPOW_NONCELEN ((SPOW_DIFFICULTY) + (SPOW_SAFETY))
+#define SPOW_CERTBYTES (((SPOW_STEPS) * SPOW_NONCELEN + 7) / 8)
+/* "1UL << SPOW_NONCELEN" fails when the sum is 64. */
+#define SPOW_MAXNONCE ((1UL << (SPOW_DIFFICULTY) << (SPOW_SAFETY)) - 1)
+#define SPOW_DIFFICULTY_MASK (((1UL << (SPOW_DIFFICULTY)) - 1) << (32 - (SPOW_DIFFICULTY)))
 
 /* hashbuf = last_hash || nonce || token || step */
-#define SPOW_H_LAST_HASH_OFF (0)
-#define SPOW_H_LAST_HASH_LEN (SPOW_MD_SIZE)
+#define SPOW_H_LAST_HASH_OFF 0
+#define SPOW_H_LAST_HASH_LEN SPOW_MD_SIZE
 #define SPOW_H_NONCE_OFF (SPOW_H_LAST_HASH_OFF + SPOW_H_LAST_HASH_LEN)
-#define SPOW_H_NONCE_LEN (8)
+#define SPOW_H_NONCE_LEN 8
 #define SPOW_H_TOKEN_OFF (SPOW_H_NONCE_OFF + SPOW_H_NONCE_LEN)
-#define SPOW_H_TOKEN_LEN (8)
+#define SPOW_H_TOKEN_LEN 8
 #define SPOW_H_STEP_OFF (SPOW_H_TOKEN_OFF + SPOW_H_TOKEN_LEN)
-#define SPOW_H_STEP_LEN (4)
+#define SPOW_H_STEP_LEN 4
 #define SPOW_HASHBYTES (SPOW_H_STEP_OFF + SPOW_H_STEP_LEN)
 #define SPOW_H_NONCE_OFF_U64 (SPOW_H_NONCE_OFF / 8)
 
 typedef char assert_SPOW_INITHASH_length[
     (sizeof(SPOW_INITHASH) == (SPOW_MD_SIZE + 1)) ? 1 : -1];
 typedef char assert_nonce_fits[
-    (SPOW_DIFFICULTY + SPOW_SAFETY <= 64) ? 1 : -1];
+    (SPOW_NONCELEN <= 64) ? 1 : -1];
 typedef char assert_SPOW_HOFF_U64_consistency[
     (SPOW_H_NONCE_OFF_U64 * 8 == SPOW_H_NONCE_OFF) ? 1 : -1];
 typedef char assert_SPOW_HBYTES_consistency[
     (SPOW_HASHBYTES == SPOW_H_LAST_HASH_LEN + SPOW_H_STEP_LEN + SPOW_H_TOKEN_LEN + SPOW_H_NONCE_LEN) ? 1 : -1];
+typedef char assert_SPOW_DIFFICULTY_limit[
+    (((SPOW_DIFFICULTY) <= 32) ? 1 : -1];
 
 static void dump_bytes(unsigned char *buf, size_t num_bytes) {
     for (size_t i = 0; i < num_bytes; ++i) {
@@ -65,8 +70,8 @@ static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *las
     /* Check whether it fits in one block.  This is not a requirement,
      * but why would you need such a high Difficulty/Safety? */
     assert(SPOW_HASHBYTES <= 55);
-    /* This implementation can't handle too large nonces: */
-    assert(SPOW_DIFFICULTY + SPOW_SAFETY <= 57);
+    /* TODO: This implementation can't handle too large nonces: */
+    assert(SPOW_NONCELEN <= 57);
 
     /* hashbuf = last_hash || nonce || token || step*/
     unsigned char hashbuf[SPOW_HASHBYTES] = "";
@@ -101,15 +106,15 @@ static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *las
         }
     }
 
-    const uint32_t fixed_bits = (SPOW_DIFFICULTY + SPOW_SAFETY) * step;
-    const uint64_t aligned_nonce = nonce << (64 - (SPOW_DIFFICULTY + SPOW_SAFETY + fixed_bits % 8));
+    const uint32_t fixed_bits = SPOW_NONCELEN * step;
+    const uint64_t aligned_nonce = nonce << (64 - (SPOW_NONCELEN + fixed_bits % 8));
     /* bit machine-i goes into byte machine-(i//8) */
     const uint32_t first_touched_byte = (fixed_bits) / 8;
-    const uint32_t last_touched_byte = (fixed_bits + (SPOW_DIFFICULTY + SPOW_SAFETY) - 1) / 8;
+    const uint32_t last_touched_byte = (fixed_bits + SPOW_NONCELEN - 1) / 8;
     const uint32_t touch_bytes = last_touched_byte - first_touched_byte + 1;
-    assert(touch_bytes * 8 <= SPOW_DIFFICULTY + SPOW_SAFETY + 14);
-    assert(touch_bytes >= (SPOW_DIFFICULTY + SPOW_SAFETY + 7) / 8);
-    assert(touch_bytes == (SPOW_DIFFICULTY + SPOW_SAFETY + fixed_bits % 8 + 7) / 8);
+    assert(touch_bytes * 8 <= SPOW_NONCELEN + 14);
+    assert(touch_bytes >= (SPOW_NONCELEN + 7) / 8);
+    assert(touch_bytes == (SPOW_NONCELEN + fixed_bits % 8 + 7) / 8);
     assert(touch_bytes <= 8);
     for (uint32_t i = 0; i < touch_bytes; ++i) {
         cert[first_touched_byte + i] |= (aligned_nonce >> (64 - (i + 1) * 8)) & 0xFF;
@@ -124,7 +129,7 @@ int main() {
     const unsigned char token[8] = SPOW_TOKEN;
     unsigned char last_hash[SPOW_MD_SIZE] = SPOW_INITHASH;
     size_t hashes = 0;
-    for (uint32_t step = 0; step < SPOW_STEPS; ++step) {
+    for (uint32_t step = 0; step < (SPOW_STEPS); ++step) {
         size_t step_hashes = extend_cert(certificate, step, last_hash, token);
 
         if (step_hashes == 0) {
