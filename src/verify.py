@@ -132,14 +132,19 @@ def run_on(init_hash, token, difficulty, safety, steps, certificate, hashes_actu
         print('===================')
         print('== ERROR: Wrong! ==')
         print('===================')
+        return False
+    return True
 
 
 def run_all(certificates):
+    all_good = True
     for i, args in enumerate(certificates):
         print('========================================')
         print('Checking cert #{} ({} bytes)'.format(i, len(args[5])))
-        run_on(*args)
+        all_good = all_good and run_on(*args)
+    return all_good
 
 
 if __name__ == '__main__':
-    run_all(TEST_CERTS)
+    if not run_all(TEST_CERTS):
+        exit(1)
