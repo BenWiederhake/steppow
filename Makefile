@@ -1,5 +1,6 @@
-CC=clang -Wall
-#CC_WARN?=-Weverything
+CC=clang
+CC_WARN?=-Wall -Wextra -pedantic
+#CC_WARN?=-Weverything -Wno-padded
 CFLAGS?=-O3 -march=native
 
 all: runprover runverifier
@@ -8,10 +9,10 @@ all: runprover runverifier
 .SUFFIX:
 
 .PHONY: runprover
-runprover: bin/prover
+runprover: bin/prove
 	$<
 
-bin/prover: src/prove.c src/portable-endian.h
+bin/prove: src/prove.c src/portable-endian.h
 	${CC} ${CC_WARN} ${CFLAGS} $< -lgcrypt -o $@
 
 .PHONY: runverifier
