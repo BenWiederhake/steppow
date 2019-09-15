@@ -1,6 +1,6 @@
 # steppow
 
-> Simple, Asymmetric Proof of Work
+> Simple Sequential Asymmetric Proof of Work
 
 I needed a proof of work system with the following properties:
 - Asymmetric
@@ -11,6 +11,11 @@ I needed a proof of work system with the following properties:
 - Bonus: Free Software
 
 Steppow implements all of these aspects as a Proof of Concept.
+
+The name comes from "Stepped Proof-of-Work".
+
+The backronym is "Stepped Transparent Esymmetric Practical Proof of Work"
+if you disregard orthography.
 
 ## Table of Contents
 
@@ -106,17 +111,10 @@ steps have already completed.  This can be used as a progress indicator.
 
 And last but not least: You can [run, study, improve and redistribute](https://en.wikipedia.org/wiki/Free_software#Definition_and_the_Four_Freedoms) to your heart's content.
 
-### Name
-
-The name comes from "Stepped Proof-of-Work".
-
-The backronym is "Stepped Transparent Esymmetric Practical Proof of Work"
-if you disregard orthography.
-
 ## Theory
 
-In some other PoW systems, the prover has to find a partial hash inverse.
-The core idea of steppow is to force the prover to sequentially do many
+In many other PoW systems, the prover has to find a partial hash inverse.
+Steppow does basically the same: it forces the prover to *sequentially* do many
 simple partial hash inverses in several steps.
 
 There are four parameters:
@@ -129,15 +127,13 @@ There are four parameters:
   Note that this is not the total number of hashes, but rather
   the number of puzzles (i.e. partial hash inversions).
 
-/* hashbuf = last_hash || nonce || token || step*/
-
 In each step, the prover needs to find a nonce of bitlength Difficulty + Safety
-such that `hash(last_hash || nonce || token || num_steps)` begins with Difficulty-many 0 bits.
+such that `hash(last_hash || nonce || token || num_steps)` begins with Difficulty-many `0` bits.
 The operator `||` is concatenation, and `last_hash` is the output hash of the previous round,
 or Initial Hash in the first round.
 
-The bits of `nonce` are *left*-padded to fill 8 bytes; as if it was a Big Endian 8-byte integer.
-The number `num_steps` is encoded as a Big Endian 4-byte integer.
+The bits of `nonce` are left-padded to fill 8 bytes; as if it was an unsigned big endian 8-byte integer.
+The number `num_steps` is encoded as a big endian 4-byte integer.
 
 ### Simple Properties
 
@@ -411,6 +407,14 @@ run faster than I can meaningfully measure.
 - PoW that sees parallelism as a benefit: [Lyra2](https://en.wikipedia.org/wiki/Lyra2)
 - See also: [List of PoW functions](https://en.wikipedia.org/wiki/Proof_of_work#List_of_Proof-of-Work_functions)
 - See also: [Proof of Space](https://en.wikipedia.org/wiki/Proof_of_space)
+- And [again](#easy-to-understand), [of course](https://spacemesh.io/posw/) I'm
+  [no](https://eprint.iacr.org/2018/183.pdf)[t](https://github.com/wfus/proof-of-sequential-work)
+  the [first](https://www.boazbarak.org/cs127/Projects/seq_work.pdf) to
+  [come up](https://dl.acm.org/citation.cfm?doid=2422436.2422479) with sequential proof of work.
+  However, these all base on complex graphs or other sophisticated structures,
+  and are non-trivial to implement.  In contrast to that,
+  "repeatedly taking the SHA256 of a buffer until one gets enogh zeros at the front, repeat for a few iterations"
+  is easy to explain; I just did.
 
 ## TODOs
 
@@ -432,7 +436,7 @@ Here are some things this project will definitely not support:
   The idea is that the parameters are already agreed-upon.
 * Compression: See [Design Considerations](#design-considerations)
 * Any other way to deal with endianness.  Trying to do it with
-  [portable includes](https://github.com/BenWiederhake/portable-endian.h/blob/0ff2b6574b56bb08efcf01311f22c177b744da1d/portable_endian.h)
+  ["portable" includes](https://github.com/BenWiederhake/portable-endian.h/blob/0ff2b6574b56bb08efcf01311f22c177b744da1d/portable_endian.h)
   is a mess.  Doing it with
   [shifts and bitmasks](https://github.com/BenWiederhake/portable-endian/blob/master/portable-endian.h)
   compiles down to
@@ -440,7 +444,7 @@ Here are some things this project will definitely not support:
   in sufficiently advanced compilers.
 
 I'm not sure how I feel about super-hyper-optimizations using assembler or SIMD-type things.
-For now, I will not focus on it, but a PR adding for example a `prover-simd.c` would be welcome.
+For now, I will not focus on it, but a PR adding, for example, a `prover-simd.c` would be welcome.
 
 ## Contribute
 
