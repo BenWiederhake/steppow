@@ -1,7 +1,7 @@
 /* Compile:
  * clang -Wall -O3 -march=native src/prove.c -lgcrypt -o bin/prove
  * Run:
- * ./bin/prove
+ * ./bin/prove config.txt
  * Yay. */
 
 /* Marginally speed up compilation */
@@ -10,80 +10,85 @@
 #define GCRYPT_NO_DEPRECATED
 
 #include <assert.h>
+#include <errno.h>
 #include <gcrypt.h>
+#include <inttypes.h> /* PRIu32 and similar */
 #include <stddef.h> /* size_t */
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h> /* memcpy / memmove */
+#include <stdlib.h> /* malloc, free */
+#include <string.h> /* memcmp, memcpy */
 
 #define PORTABLE_ENDIAN_NO_UINT_16_T
 
-#include "prove-config.h"
 #include "portable-endian.h"
 
 /* I don't think this will ever change.  But just in case.
  * However, you may want to choose a hash which has block size at least
  * SPOW_HASHBYTES + 1 + 8, because then it probably fits in a block. */
-#define SPOW_HASHALGO GCRY_MD_SHA256
+#define SPOW_HASH_SIZE (256 / 8)
+#define SPOW_HASH_ALGO (GCRY_MD_SHA256)
 
-/* Policy: Don't trust the macros defined in prove-config.h,
- * but *do* trust the macros defined here. */
-#define SPOW_MD_SIZE (256 / 8)
-#define SPOW_NONCELEN ((SPOW_DIFFICULTY) + (SPOW_SAFETY))
-#define SPOW_CERTBYTES (((SPOW_STEPS) * SPOW_NONCELEN + 7) / 8)
-/* "1UL << SPOW_NONCELEN" fails when the sum is 64. */
-#define SPOW_MAXNONCE ((1UL << (SPOW_DIFFICULTY) << (SPOW_SAFETY)) - 1)
-#define SPOW_DIFFICULTY_MASK (((1UL << (SPOW_DIFFICULTY)) - 1) << (32 - (SPOW_DIFFICULTY)))
+#define SPOW_TOKEN_SIZE    8
+#define SPOW_NONCE_MAXSIZE 8
 
 /* hashbuf = last_hash || nonce || token || step */
 #define SPOW_H_LAST_HASH_OFF 0
-#define SPOW_H_LAST_HASH_LEN SPOW_MD_SIZE
+#define SPOW_H_LAST_HASH_LEN (SPOW_HASH_SIZE)
 #define SPOW_H_NONCE_OFF (SPOW_H_LAST_HASH_OFF + SPOW_H_LAST_HASH_LEN)
-#define SPOW_H_NONCE_LEN 8
+#define SPOW_H_NONCE_LEN (SPOW_NONCE_MAXSIZE)
 #define SPOW_H_TOKEN_OFF (SPOW_H_NONCE_OFF + SPOW_H_NONCE_LEN)
-#define SPOW_H_TOKEN_LEN 8
+#define SPOW_H_TOKEN_LEN (SPOW_TOKEN_SIZE)
 #define SPOW_H_STEP_OFF (SPOW_H_TOKEN_OFF + SPOW_H_TOKEN_LEN)
 #define SPOW_H_STEP_LEN 4
 #define SPOW_HASHBYTES (SPOW_H_STEP_OFF + SPOW_H_STEP_LEN)
 #define SPOW_H_NONCE_OFF_U64 (SPOW_H_NONCE_OFF / 8)
 
-typedef char assert_SPOW_INITHASH_length[
-    (sizeof(SPOW_INITHASH) == (SPOW_MD_SIZE + 1)) ? 1 : -1];
-typedef char assert_nonce_fits[
-    (SPOW_NONCELEN <= 64) ? 1 : -1];
 typedef char assert_SPOW_HOFF_U64_consistency[
     (SPOW_H_NONCE_OFF_U64 * 8 == SPOW_H_NONCE_OFF) ? 1 : -1];
 typedef char assert_SPOW_HBYTES_consistency[
     (SPOW_HASHBYTES == SPOW_H_LAST_HASH_LEN + SPOW_H_STEP_LEN + SPOW_H_TOKEN_LEN + SPOW_H_NONCE_LEN) ? 1 : -1];
-typedef char assert_SPOW_DIFFICULTY_limit[
-    ((SPOW_DIFFICULTY) <= 32) ? 1 : -1];
 
-static void dump_bytes(unsigned char *buf, size_t num_bytes) {
+typedef struct config_t {
+    unsigned char init_hash[SPOW_HASH_SIZE];
+    unsigned char token[SPOW_TOKEN_SIZE];
+    uint32_t difficulty;
+    uint32_t safety;
+    uint32_t steps;
+} config_t;
+
+static void dump_bytes(const unsigned char *buf, size_t num_bytes) {
     for (size_t i = 0; i < num_bytes; ++i) {
         printf("\\x%02X", buf[i]);
     }
 }
 
-static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *last_hash, const unsigned char *token) {
+static size_t extend_cert(const config_t *config,
+                          unsigned char *cert,
+                          uint32_t step,
+                          unsigned char *last_hash) {
     /* Check alignment: */
     assert((((intptr_t)last_hash) & 0x3) == 0);
     /* Check whether it fits in one block.  This is not a requirement,
      * but why would you need such a high Difficulty/Safety? */
     assert(SPOW_HASHBYTES <= 55);
     /* TODO: This implementation can't handle too large nonces: */
-    assert(SPOW_NONCELEN <= 57);
+    assert(config->difficulty + config->safety <= 57);
+
+    const uint64_t nonce_max = (((uint64_t)1) << (config->difficulty + config->safety)) - 1;
+    const uint32_t difficulty_mask =
+        pe_htobe32(((((uint32_t)1) << config->difficulty) - 1) << (32 - config->difficulty));
 
     /* hashbuf = last_hash || nonce || token || step*/
     unsigned char hashbuf[SPOW_HASHBYTES] = "";
-    memmove(hashbuf + SPOW_H_LAST_HASH_OFF, last_hash, SPOW_H_LAST_HASH_LEN);
+    memcpy(hashbuf + SPOW_H_LAST_HASH_OFF, last_hash, SPOW_H_LAST_HASH_LEN);
     /* Skip nonce for now. */
-    memmove(hashbuf + SPOW_H_TOKEN_OFF, token, SPOW_H_TOKEN_LEN);
+    memcpy(hashbuf + SPOW_H_TOKEN_OFF, config->token, SPOW_H_TOKEN_LEN);
     const uint32_t step_be = pe_htobe32(step);
-    memmove(hashbuf + SPOW_H_STEP_OFF, &step_be, SPOW_H_STEP_LEN);
+    memcpy(hashbuf + SPOW_H_STEP_OFF, &step_be, SPOW_H_STEP_LEN);
 
     uint64_t *u64_hashbuf = (uint64_t *)hashbuf;
     uint64_t nonce = 0;
-    const uint32_t difficulty_mask = pe_htobe32(SPOW_DIFFICULTY_MASK);
     for (; ; ++nonce) {
         /* Write nonce. */
         u64_hashbuf[SPOW_H_NONCE_OFF_U64] = pe_htobe64(nonce);
@@ -91,7 +96,7 @@ static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *las
         /* We use u64_hashbuf so that the compiler definitely sees the
          * read *and* writes on it, even when it assumes
          * strict non-aliasing (which we violate). */
-        gcry_md_hash_buffer(SPOW_HASHALGO, last_hash,
+        gcry_md_hash_buffer(SPOW_HASH_ALGO, last_hash,
             (unsigned char *)u64_hashbuf, SPOW_HASHBYTES);
         /* Are we done yet? */
         uint32_t relevant_digest = ((uint32_t *)last_hash)[0] & difficulty_mask;
@@ -99,51 +104,214 @@ static size_t extend_cert(unsigned char *cert, uint32_t step, unsigned char *las
             /* All required-zero bits are zero: */
             break;
         }
-        if (nonce == SPOW_MAXNONCE) {
+        if (nonce == nonce_max) {
             /* The impossible happened: Backtracking needed, but not implemented.
              * See README.md, topics "Safety" and "Recommendations". */
             return 0;
         }
     }
 
-    const uint32_t fixed_bits = SPOW_NONCELEN * step;
-    const uint64_t aligned_nonce = nonce << (64 - (SPOW_NONCELEN + fixed_bits % 8));
-    /* bit machine-i goes into byte machine-(i//8) */
+    const uint32_t fixed_bits = (config->difficulty + config->safety) * step;
+    /* Left-align the nonce, i.e.: 0bNNN…NNN0000…00000 */
+    const uint64_t aligned_nonce = nonce << (64 - (config->difficulty + config->safety + fixed_bits % 8));
+
+    /* Prepare copying */
     const uint32_t first_touched_byte = (fixed_bits) / 8;
-    const uint32_t last_touched_byte = (fixed_bits + SPOW_NONCELEN - 1) / 8;
+    const uint32_t last_touched_byte = (fixed_bits + config->difficulty + config->safety - 1) / 8;
     const uint32_t touch_bytes = last_touched_byte - first_touched_byte + 1;
-    assert(touch_bytes * 8 <= SPOW_NONCELEN + 14);
-    assert(touch_bytes >= (SPOW_NONCELEN + 7) / 8);
-    assert(touch_bytes == (SPOW_NONCELEN + fixed_bits % 8 + 7) / 8);
+    assert(touch_bytes == (config->difficulty + config->safety + fixed_bits % 8 + 7) / 8);
     assert(touch_bytes <= 8);
+    assert(last_touched_byte < (config->steps * (config->difficulty + config->safety) + 7) / 8);
+
     for (uint32_t i = 0; i < touch_bytes; ++i) {
         cert[first_touched_byte + i] |= (aligned_nonce >> (64 - (i + 1) * 8)) & 0xFF;
     }
 
+    /* This can't overflow because difficulty + safety <= 63 */
     return nonce + 1;
 }
 
-int main() {
-    /* Provide space for safe overwriting. */
-    unsigned char certificate[SPOW_CERTBYTES + 7] = "";
-    const unsigned char token[8] = SPOW_TOKEN;
-    unsigned char last_hash[SPOW_MD_SIZE] = SPOW_INITHASH;
+static int find_cert(const struct config_t *config,
+                     unsigned char **out_cert,
+                     uint32_t *out_cert_size,
+                     size_t *out_hashes) {
+    const uint32_t cert_size = (config->steps * (config->difficulty + config->safety) + 7) / 8;
+    unsigned char *cert = malloc(cert_size);
+    /* All nonces are or'd into the certificate, so first clear the memory: */
+    memset(cert, 0, cert_size);
+    assert(cert);
     size_t hashes = 0;
-    for (uint32_t step = 0; step < (SPOW_STEPS); ++step) {
-        size_t step_hashes = extend_cert(certificate, step, last_hash, token);
 
+    unsigned char last_hash[SPOW_HASH_SIZE];
+    memcpy(last_hash, config->init_hash, sizeof(last_hash));
+
+    for (uint32_t step = 0; step < config->steps; ++step) {
+        const size_t step_hashes = extend_cert(config, cert, step, last_hash);
         if (step_hashes == 0) {
             printf("Failed in step %u, would need to backtrack!\n", step);
             /* However, this is sufficiently unlikely.
              * See README.md, topics "Safety" and "Recommendations". */
-            return 1;
+            free(cert);
+            return 0;
         }
-        /* Theoretically you can overflow here.
+        /* Theoretically this can overflow.
          * Practically, this costs 2^64 hash computations. See you in 2080. */
         hashes += step_hashes;
     }
-    printf("Certificate found after %lu hashes:\n", hashes);
-    dump_bytes(certificate, SPOW_CERTBYTES);
-    printf("\n");
-    return 0;
+
+    *out_cert = cert;
+    *out_cert_size = cert_size;
+    *out_hashes = hashes;
+    return 1;
+}
+
+typedef struct selftest_t {
+    const char *name;
+    config_t config;
+    int known_answer;
+    size_t expected_hashes;
+    const unsigned char *expected_cert;
+    uint32_t expected_cert_size;
+} selftest_t;
+
+static int run_selftest(const selftest_t *selftest) {
+    size_t actual_hashes = 0;
+    uint32_t actual_cert_size = 0;
+    unsigned char *actual_cert = NULL;
+
+    if (!find_cert(&selftest->config, &actual_cert, &actual_cert_size, &actual_hashes)) {
+        printf("Selftest \"%s\" failed: No cert found!\n\n", selftest->name);
+        return 0;
+    }
+
+    if (selftest->known_answer) {
+        if (actual_cert_size != selftest->expected_cert_size) {
+            printf("Selftest \"%s\" failed: cert_size mismatch!\n"
+                "\tActual %" PRIu32 "\n"
+                "\tExpect %" PRIu32 "\n\n",
+                selftest->name, actual_cert_size, selftest->expected_cert_size);
+            free(actual_cert);
+            return 0;
+        }
+        
+        if (0 != memcmp(actual_cert, selftest->expected_cert, actual_cert_size)) {
+            printf("Selftest \"%s\" failed: cert mismatch!\n"
+                "\tActual: ",
+                selftest->name);
+            dump_bytes(actual_cert, actual_cert_size);
+            printf("\n\tExpect: ");
+            dump_bytes(selftest->expected_cert, selftest->expected_cert_size);
+            printf("\n\n");
+            free(actual_cert);
+            return 0;
+        }
+        
+        if (actual_hashes != selftest->expected_hashes) {
+            printf("Selftest \"%s\" failed: hash amount mismatch!\n"
+                "\tActual %zu\n"
+                "\tExpect %zu\n\n",
+                selftest->name, actual_hashes, selftest->expected_hashes);
+            free(actual_cert);
+            return 0;
+        }
+
+        printf("Selftest \"%s\" passed.\n\n",
+            selftest->name);
+    } else {
+        printf("Selftest \"%s\" results:\n"
+            "\tHashes: %zu\n"
+            "\tCert size: %" PRIu32 "\n"
+            "\tCert: ",
+            selftest->name, actual_hashes, actual_cert_size);
+        dump_bytes(actual_cert, actual_cert_size);
+        printf("\n\n");
+    }
+
+    free(actual_cert);
+    return 1;
+}
+
+#define STEPPOW_STRING_AND_SIZE(x) ((const unsigned char *)x), ((uint32_t)(sizeof(x)-1))
+static const selftest_t BASIC_SELFTESTS[] = {
+    /*
+     * {
+     *     name,
+     *     {init_hash,
+     *         token, difficulty, safety, steps},
+     *     known_answer, expected_hashes,
+     *     expected_cert, expected_cert_size
+     * }
+     *
+     * Generated from ./src/verify.py --print-selftests
+     */
+    {
+        "verify.py #0",
+        {"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01",
+            "\x02\x02\x02\x02\x02\x02\x02\x02", 8, 8, 1},
+        1, 780,
+        STEPPOW_STRING_AND_SIZE("\x03\x0b")
+    },
+    {
+        "verify.py #1",
+        {"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01",
+            "\x02\x02\x02\x02\x02\x02\x02\x02", 8, 8, 20},
+        1, 4759,
+        STEPPOW_STRING_AND_SIZE("\x03\x0b\x00\x7f\x00\x54\x01\x81\x00\x2e\x01\xfe\x00\x96\x00\x6a\x00\xbc\x01\x37\x00\x37\x00\x6a\x00\x34\x03\x92\x00\x4a\x00\x1c\x00\x3f\x01\xc4\x00\xfd\x00\x38")
+    },
+    {
+        "verify.py #5",
+        {"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+            "\x00\x00\x00\x00\x00\x00\x00\x00", 7, 7, 33},
+        1, 3061,
+        STEPPOW_STRING_AND_SIZE("\x02\x98\x07\xa0\x5c\x80\xc9\x02\x40\x02\xd0\x14\x00\x35\x00\xac\x02\x00\x15\x40\x0c\x01\x50\x04\x00\x14\x00\xcb\x00\xbc\x06\x50\x2a\x40\x63\x00\x6c\x01\x50\x04\x40\x42\x03\x2c\x04\x40\x23\x00\x2e\x01\x54\x03\x60\x00\x80\x2e\x00\xd4")
+    },
+    {
+        "verify.py #10",
+        {"\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a",
+            "\x5a\x5a\x5a\x5a\x5a\x5a\x5a\x5a", 8, 7, 100},
+        1, 23244,
+        STEPPOW_STRING_AND_SIZE("\x05\x92\x00\xbc\x07\xe0\x0f\xc0\x59\xa0\x0c\x00\x03\x00\x13\x00\xee\x00\x30\x0e\x58\x0c\x50\x07\x00\x84\x40\x54\x00\x85\x01\xcc\x00\x18\x03\xf8\x15\x50\x03\x60\x2c\x40\x30\x00\x69\x00\x02\x01\xd4\x0e\x00\x15\xe0\x03\xa0\x1b\x80\xb1\x80\xa4\x00\x2c\x04\x38\x10\xe8\x1c\x10\x13\x80\x74\xc0\x55\x00\x5c\x01\x1a\x03\x08\x05\xf0\x01\x00\x29\xc0\x50\x00\xa2\x82\x15\x05\x5e\x07\xa0\x01\x40\x04\xd0\x18\x40\x63\x40\xc6\x80\xdc\x00\x90\x00\xfc\x04\x20\x19\x40\x17\x80\x3a\x00\x6c\x00\xbc\x00\xe8\x01\x18\x13\xa8\x01\x60\x0a\xa0\x11\x01\x46\x00\x7b\x00\x36\x00\x50\x02\x50\x15\xf0\x03\x20\x8d\xc0\x18\x80\xe2\x00\x06\x03\x84\x12\xe8\x1b\x90\x19\x60\x29\x01\xd1\x02\x67\x00\x6a\x02\x8c\x02\xe8\x24\x80\x18\x40\x08\x80\x6f\x80\xb2\x02\x14\x00\x8c\x08\xc8\x07\xd0")
+    },
+    {
+        "verify.py #11",
+        {"\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f\x0f",
+            "\x48\x69\x20\x6d\x61\x74\x65\x21", 12, 7, 122},
+        1, 598812,
+        STEPPOW_STRING_AND_SIZE("\x00\x6f\x80\x01\x3c\x03\x34\x82\xd9\x60\x38\x18\x02\xab\x40\x05\xe0\x38\x48\x03\x6c\xc0\x02\xbc\x0d\x65\x00\xe9\xf0\x02\x98\x02\xe5\x00\xdb\xa0\x1a\x4b\x02\x60\x00\xa1\x1c\x04\x24\x01\x2f\x00\x12\xca\x06\x94\x00\xef\x28\x18\x2b\x01\x13\xc0\x38\xa0\x02\x1c\x00\xdb\x70\x00\x26\x09\xd7\xc0\x7a\x40\x08\x9f\x00\x5e\xa0\x94\xb8\x06\xd2\x02\x1c\xc0\x19\x84\x0f\xa2\x01\x26\x38\x20\x81\x00\x40\x80\x0d\x7c\x05\xa1\x82\x3e\xf0\x2f\x94\x03\x7c\x80\x9f\xd8\x12\x93\x02\xb2\xc0\x32\x30\x01\xcd\x01\x24\x50\x3d\x44\x05\xdb\x40\x3c\x10\x0a\x3b\x01\xa8\x40\x5f\x14\x00\xc6\x00\xfe\x20\x5f\x34\x0a\x07\xc0\x0f\x18\x1c\xaa\x00\x97\x00\x38\x24\x0e\xf5\x80\xf5\xf0\x3e\x28\x07\x6f\xc3\xd6\x60\x00\x29\x02\x61\xa0\x30\xcc\x1b\xe3\x80\x3a\xa0\x06\xe0\x00\x1e\x40\x52\xb8\x2c\x90\x00\x3c\x40\x49\xf0\x16\x01\x00\x1d\xd0\x03\x04\x04\xb9\x40\x41\x90\x0b\x04\x06\x31\x80\x01\x9c\x10\xde\x01\x9e\x70\x0f\x2a\x01\x9f\xc0\x1c\xd0\x3e\xde\x01\xb0\x00\x0c\x10\x05\x13\x81\x78\x20\x1b\x86\x03\x6e\x40\x0e\x48\x1c\x42\x03\xc8\xc0\x85\xbc\x07\xd1\x01\x9c\x50\xb7\xf6\x00\x3d\x80\x0c\x18\x0d\x9d\x06\x0c\xa0\x0b\xe4\x03\x0c\x00\x63\xf0\x16\xee\x01\x1e\x40\x63\xa8\x00\xf8\x00\x07\x60\x06\x88")
+    },
+    /* Skip verify.py #13 */
+    {
+        "verify.py #15",
+        {"\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x31\x32\x33\x34\x35\x36",
+            "\x31\x32\x33\x34\x35\x36\x37\x38", 9, 7, 200},
+        1, 109895,
+        STEPPOW_STRING_AND_SIZE("\x01\x35\x05\x17\x02\x1a\x05\xae\x04\xb5\x04\xba\x01\xcb\x00\xff\x02\x00\x04\x9e\x04\x4d\x05\x17\x00\x8a\x00\xec\x00\x2a\x03\x58\x05\x0c\x02\x29\x03\x21\x01\x01\x00\xe5\x04\x2a\x00\x40\x02\xc9\x00\x1c\x01\x58\x02\x78\x02\x8d\x04\x3b\x02\xaa\x03\xcb\x00\xf3\x00\xc2\x00\x12\x01\x58\x05\xfd\x01\x42\x06\x71\x00\x71\x05\xa4\x00\x34\x03\x5e\x00\x5b\x00\xde\x01\x84\x00\x8b\x00\x60\x02\xc8\x01\xe7\x02\xa7\x00\x91\x03\x59\x03\x35\x01\x7b\x05\xd9\x03\x9b\x00\xa7\x01\x77\x01\x7a\x00\x4a\x00\x3a\x01\xef\x00\xfe\x04\x8b\x01\x06\x00\x13\x02\xf8\x01\x04\x01\x6d\x00\xd2\x01\x07\x00\x6d\x01\x2e\x01\x0a\x04\x0b\x01\x5c\x05\xf6\x04\xf9\x00\x4e\x01\x76\x03\x4c\x04\xa5\x00\xe9\x01\xde\x04\xfd\x03\x60\x01\x2e\x00\x52\x00\x8a\x01\x35\x01\x4b\x02\x81\x00\x47\x04\xef\x00\x61\x00\x9a\x00\xde\x01\x30\x02\x1b\x02\xcf\x00\x89\x05\x1d\x01\x83\x01\x84\x01\x72\x01\x2a\x00\x84\x02\xd8\x01\xbd\x00\xf6\x00\x87\x04\x15\x00\x15\x02\x5c\x02\x4c\x01\x1c\x02\x09\x02\xc5\x04\x34\x01\x46\x00\x2f\x01\x2d\x02\x30\x02\x34\x01\x8a\x00\x2a\x00\xda\x00\x2c\x0b\xd2\x02\x1f\x02\x70\x03\x00\x03\x81\x01\xf1\x02\x42\x00\x99\x00\xf2\x00\xc0\x03\x8b\x04\x1e\x01\x54\x03\x52\x00\x29\x04\x9f\x02\x84\x00\xf4\x00\x7c\x00\xe0\x00\xee\x03\x0d\x00\xa0\x01\x92\x04\x49\x00\x5b\x04\x10\x02\xcd\x01\xac\x02\x0b\x01\x43\x01\xd8\x02\xc7\x02\x1d\x05\x21\x00\x69\x01\x56\x01\x52\x00\xd9\x00\xe7\x04\xa8\x00\xdc\x00\xee\x00\x7c\x02\x65\x02\x3b\x05\x11\x00\x1b\x00\xea\x04\x76\x00\x9a\x02\x6a\x01\x27\x01\xda\x01\x8a\x00\xc0\x04\x9c\x01\x13\x00\x12\x05\xbf\x00\x3d\x00\x49\x02\xa2\x02\x8c\x01\x7a\x02\xaa\x03\xa1\x00\x99\x00\xb2\x08\xf2\x01\x41\x05\x17")
+    },
+    {
+        "verify.py #16",
+        {"\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x31\x32\x33\x34\x35\x36",
+            "\x38\x37\x36\x35\x34\x33\x32\x31", 17, 7, 160},
+        1, 23896052,
+        STEPPOW_STRING_AND_SIZE("\x00\xd2\x7b\x02\x9a\xb1\x00\x41\x79\x00\xe0\x93\x01\xd6\xb1\x00\x99\x28\x00\x84\x68\x05\x45\x94\x00\x72\xe9\x02\xa6\xba\x01\x4c\xf5\x00\x0f\x67\x00\x43\x4c\x00\xdd\x1c\x02\x78\xeb\x00\xeb\x90\x02\xe6\xe4\x01\x0b\x04\x00\x15\xa8\x0c\x23\x50\x00\x17\x69\x00\x0a\xdb\x00\x6a\xe8\x02\x62\xe3\x01\x61\x35\x00\xa1\x75\x02\xa2\x67\x01\x5d\xe8\x03\x4a\x08\x03\xf4\x6c\x0d\xe5\x72\x04\x4c\xa1\x07\x27\x80\x00\x5a\x61\x00\xe1\x9a\x07\x4f\x7f\x02\x8a\xb7\x00\x88\x34\x02\x56\x71\x00\x3b\xbc\x00\x09\x46\x06\x39\xbb\x00\x67\xe1\x01\x18\xb8\x00\x01\x5f\x04\x9b\x60\x00\x1d\x3d\x05\x30\xc6\x02\x01\x35\x02\x6d\x21\x04\x48\x70\x00\x5d\xcb\x03\x3e\x60\x02\x3d\xa5\x01\x53\xf7\x01\x62\x29\x04\xf7\x74\x02\x46\x1d\x03\x93\x47\x03\x6d\xfe\x06\xac\xb0\x00\x69\xc7\x04\x0c\x78\x01\x78\xe7\x09\x2a\x1a\x03\x50\x5b\x01\x7a\x06\x02\x3c\xc9\x03\xc0\xe8\x01\xc4\x40\x09\x22\x21\x04\x69\x7b\x01\xc2\x9e\x01\x66\xe9\x01\xdd\x04\x00\x12\x86\x05\x50\x94\x00\x4e\xdc\x01\x8e\xed\x00\x53\x45\x05\x4e\x35\x00\x37\xab\x0c\x51\x6f\x02\x40\x54\x00\x16\xf5\x01\xc4\x20\x00\x14\xfa\x01\x5d\x89\x01\x79\x42\x02\x50\xab\x01\x83\x15\x01\x54\xa0\x00\xe8\x6f\x00\x22\x56\x03\xbe\xbd\x00\x44\x71\x01\x34\xe0\x01\x82\xd9\x01\x29\xb3\x00\x23\x4e\x01\xa4\xce\x02\x9f\xda\x01\xac\x59\x00\x59\x2f\x02\xcf\x33\x01\x47\x1e\x00\x75\xf2\x00\xb8\xdf\x04\x7c\xa0\x01\x80\x95\x03\x97\x70\x03\x45\x8a\x00\x8b\x96\x00\xee\x08\x03\x8a\xc3\x00\xa8\x60\x01\xd2\x61\x01\xa0\x92\x00\x23\x5c\x05\x30\x96\x01\x55\x56\x00\x77\xcd\x00\x0b\x1d\x01\xd1\x5b\x00\x32\x5e\x02\x1e\x9d\x00\xb3\x67\x03\x27\xa1\x02\xcc\xe2\x00\xbc\x52\x01\x8e\xdb\x03\xae\xcb\x01\x76\xb9\x08\xf5\xf7\x03\x35\x22\x00\x52\x52\x00\x89\xe4\x00\x67\x34\x00\x8a\x21\x00\xa3\x8e\x03\x61\x0a\x00\x04\x75\x04\x06\xe6\x01\x5f\xb9\x03\x4b\x8f\x04\x9a\x31\x01\x44\xcc\x01\xb7\xcf\x01\x0a\x96\x01\x8d\x9a\x01\x3d\xbe\x05\x2c\xa5\x00\x6c\x96\x00\xf5\x3e\x00\x1b\xbf\x05\x52\x40\x00\xad\x62\x02\x9e\x2f\x00\xe9\xfd\x08\xeb\xea")
+    },
+    {
+        "verify.py #17",
+        {"\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x31\x32\x33\x34\x35\x36",
+            "\x6c\x61\x38\x61\x57\x34\x7a\x50", 24, 8, 10},
+        1, 141001879,
+        STEPPOW_STRING_AND_SIZE("\x02\xa3\x0a\x20\x00\xf6\x1c\x17\x00\x04\x9d\x05\x00\xfb\x8d\x00\x02\x04\x41\xcf\x00\x72\x11\x1a\x00\x7a\x16\x24\x00\x09\x4b\xb4\x00\x15\x57\x4c\x00\xbf\x28\x44")
+    }
+};
+
+int main() {
+    const uint32_t tests_total = sizeof(BASIC_SELFTESTS)/sizeof(BASIC_SELFTESTS[0]);
+    uint32_t tests_passed = 0;
+    for (uint32_t i = 0; i < tests_total; ++i) {
+        if (run_selftest(&BASIC_SELFTESTS[i])) {
+            tests_passed += 1;
+        }
+    }
+    printf("Test results: passed %" PRIu32 ", failed %" PRIu32 ", %" PRIu32 " total.\n",
+        tests_passed, tests_total - tests_passed, tests_total);
+    return tests_passed != tests_total;
 }

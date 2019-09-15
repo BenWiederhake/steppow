@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
+import sys
+
 from hashlib import sha256
 from math import ceil, log2
 from struct import Struct
 
 TEST_CERTS = [
-    (b'\x01' * 32, b'\x02' * 8, 8, 8, 20,  # Just for debugging
-     b'\x05\x7E\x04\x25\x04\x3F\x06\x30\x04\x94\x04\x03\x04\xE2\x04\x06\x04\x19\x04\xEA\x05\x61\x04\x6F\x06\x36\x06\x2C\x04\x02\x04\x28\x05\x66\x04\xDF\x04\x6B\x05\x31', 24805, True),
+    (b'\x01' * 32, b'\x02' * 8, 8, 8, 1,  # Just for debugging x1
+     b'\x03\x0B', 780, True),
+    (b'\x01' * 32, b'\x02' * 8, 8, 8, 20,  # Just for debugging x20
+     b'\x03\x0B\x00\x7F\x00\x54\x01\x81\x00\x2E\x01\xFE\x00\x96\x00\x6A\x00\xBC\x01\x37\x00\x37\x00\x6A\x00\x34\x03\x92\x00\x4A\x00\x1C\x00\x3F\x01\xC4\x00\xFD\x00\x38', 4759, True),
+     
     (b'\x00' * 32, b'\x00' * 8, 7, 7, 800,  # Basic sanity checks
      b'\xFF' * 10, -1, False),
     (b'\x00' * 32, b'\x00' * 8, 7, 7, 800,
@@ -136,15 +141,62 @@ def run_on(init_hash, token, difficulty, safety, steps, certificate, hashes_actu
     return True
 
 
+SELFTEST_FORMAT = '''\
+    {{
+        "{name}",
+        {{"{init_hash}",
+            "{token}", {difficulty}, {safety}, {steps}}},
+        1, {hashes},
+        STEPPOW_STRING_AND_SIZE("{cert}")
+    }}\
+'''
+
+
+def bytes_to_cstr(bb):
+    return ''.join('\\x{:02x}'.format(b) for b in bb)
+
+
+def print_selftests(certificates):
+    parts = []
+    for i, selftest in enumerate(certificates):
+        init_hash, token, diff, safety, steps, cert, hashes, valid = selftest
+        if not valid:
+            continue
+        parts.append(SELFTEST_FORMAT.format(
+            name='verify.py #{}'.format(i),
+            init_hash=bytes_to_cstr(init_hash),
+            token=bytes_to_cstr(token),
+            difficulty=diff,
+            safety=safety,
+            steps=steps,
+            cert=bytes_to_cstr(cert),
+            hashes = hashes,
+        ))
+    print(',\n'.join(parts))
+
+
 def run_all(certificates):
     all_good = True
     for i, args in enumerate(certificates):
         print('========================================')
         print('Checking cert #{} ({} bytes)'.format(i, len(args[5])))
-        all_good = all_good and run_on(*args)
+        all_good = run_on(*args) and all_good
     return all_good
 
 
-if __name__ == '__main__':
-    if not run_all(TEST_CERTS):
+def run(argv):
+    if len(argv) == 1:
+        if run_all(TEST_CERTS):
+            exit(0)
+        else:
+            exit(1)
+    elif len(argv) == 2 and argv[1] == '--print-selftests':
+        print_selftests(TEST_CERTS)
+        exit(0)
+    else:
+        print('Unrecognized argument(s): {}\nUSAGE: {} [--print-selftests]'.format(
+            argv[1:], argv[0]), file=sys.stderr)
         exit(1)
+
+if __name__ == '__main__':
+    run(sys.argv)

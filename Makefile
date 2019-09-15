@@ -11,7 +11,7 @@ all: runprover runverifier
 runprover: bin/prover
 	$<
 
-bin/prover: src/prove.c src/prove-config.h src/portable-endian.h
+bin/prover: src/prove.c src/portable-endian.h
 	${CC} ${CC_WARN} ${CFLAGS} $< -lgcrypt -o $@
 
 .PHONY: runverifier
