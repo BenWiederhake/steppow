@@ -8,6 +8,8 @@ from struct import Struct
 
 TEST_CERTS = [
     (b'\x01' * 32, b'\x02' * 8, 8, 8, 1,  # Just for debugging x1
+     b'\x00\xF7', 780, True),
+    (b'\x01' * 32, b'\x02' * 8, 8, 8, 1,  # Just for debugging x1
      b'\x03\x0B', 780, True),
     (b'\x01' * 32, b'\x02' * 8, 8, 8, 20,  # Just for debugging x20
      b'\x03\x0B\x00\x7F\x00\x54\x01\x81\x00\x2E\x01\xFE\x00\x96\x00\x6A\x00\xBC\x01\x37\x00\x37\x00\x6A\x00\x34\x03\x92\x00\x4A\x00\x1C\x00\x3F\x01\xC4\x00\xFD\x00\x38', 4759, True),
@@ -123,7 +125,8 @@ def try_verify(init_hash, token, difficulty, safety, steps, certificate):
         assert len(hashbuf) == HASHBYTES
         last_hash, success = check_difficulty(hashbuf, difficulty)
         if not success:
-            print('Failed at step {}, with buf {}'.format(i, hashbuf))
+            print('Failed at step {}, with buf {}, resulting in hash {}'.format(
+                i, hashbuf, last_hash))
             return False
     return True
 

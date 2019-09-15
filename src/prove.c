@@ -13,7 +13,7 @@
 #include <errno.h>
 #include <gcrypt.h>
 #include <inttypes.h> /* PRIu32 and similar */
-#include <stddef.h> /* size_t */
+#include <stddef.h> /* size_t, offsetof */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h> /* malloc, free */
@@ -28,26 +28,34 @@
  * SPOW_HASHBYTES + 1 + 8, because then it probably fits in a block. */
 #define SPOW_HASH_SIZE (256 / 8)
 #define SPOW_HASH_ALGO (GCRY_MD_SHA256)
-
-#define SPOW_TOKEN_SIZE    8
-#define SPOW_NONCE_MAXSIZE 8
+#define SPOW_TOKEN_SIZE 8
+#define SPOW_DUMMY_BYTES 4
 
 /* hashbuf = last_hash || nonce || token || step */
-#define SPOW_H_LAST_HASH_OFF 0
-#define SPOW_H_LAST_HASH_LEN (SPOW_HASH_SIZE)
-#define SPOW_H_NONCE_OFF (SPOW_H_LAST_HASH_OFF + SPOW_H_LAST_HASH_LEN)
-#define SPOW_H_NONCE_LEN (SPOW_NONCE_MAXSIZE)
-#define SPOW_H_TOKEN_OFF (SPOW_H_NONCE_OFF + SPOW_H_NONCE_LEN)
-#define SPOW_H_TOKEN_LEN (SPOW_TOKEN_SIZE)
-#define SPOW_H_STEP_OFF (SPOW_H_TOKEN_OFF + SPOW_H_TOKEN_LEN)
-#define SPOW_H_STEP_LEN 4
-#define SPOW_HASHBYTES (SPOW_H_STEP_OFF + SPOW_H_STEP_LEN)
-#define SPOW_H_NONCE_OFF_U64 (SPOW_H_NONCE_OFF / 8)
-
-typedef char assert_SPOW_HOFF_U64_consistency[
-    (SPOW_H_NONCE_OFF_U64 * 8 == SPOW_H_NONCE_OFF) ? 1 : -1];
-typedef char assert_SPOW_HBYTES_consistency[
-    (SPOW_HASHBYTES == SPOW_H_LAST_HASH_LEN + SPOW_H_STEP_LEN + SPOW_H_TOKEN_LEN + SPOW_H_NONCE_LEN) ? 1 : -1];
+typedef struct hashbuf_t {
+    unsigned char last_hash[SPOW_HASH_SIZE];
+    uint64_t nonce;
+    unsigned char token[SPOW_TOKEN_SIZE];
+    uint32_t step;
+#if SPOW_DUMMY_BYTES != 0
+    unsigned char dummy[SPOW_DUMMY_BYTES];
+#endif
+} hashbuf_t;
+#define SPOW_HASHBYTES (SPOW_HASH_SIZE + 8 + SPOW_TOKEN_SIZE + 4)
+typedef char assert_SPOW_hashbuf_size[
+    (sizeof(hashbuf_t) == SPOW_HASHBYTES + SPOW_DUMMY_BYTES) ? 1 : -1];
+typedef char assert_SPOW_hashbuf_offset_last_hash[
+    (offsetof(hashbuf_t, last_hash) == 0) ? 1 : -1];
+typedef char assert_SPOW_hashbuf_offset_nonce[
+    (offsetof(hashbuf_t, nonce) == SPOW_HASH_SIZE) ? 1 : -1];
+typedef char assert_SPOW_hashbuf_offset_token[
+    (offsetof(hashbuf_t, token) == SPOW_HASH_SIZE + 8) ? 1 : -1];
+typedef char assert_SPOW_hashbuf_offset_step[
+    (offsetof(hashbuf_t, step) == SPOW_HASH_SIZE + 8 + SPOW_TOKEN_SIZE) ? 1 : -1];
+#if SPOW_DUMMY_BYTES != 0
+typedef char assert_SPOW_hashbuf_offset_dummy[
+    (offsetof(hashbuf_t, dummy) == SPOW_HASHBYTES) ? 1 : -1];
+#endif
 
 typedef struct config_t {
     unsigned char init_hash[SPOW_HASH_SIZE];
@@ -79,25 +87,19 @@ static size_t extend_cert(const config_t *config,
     const uint32_t difficulty_mask =
         pe_htobe32(((((uint32_t)1) << config->difficulty) - 1) << (32 - config->difficulty));
 
-    /* hashbuf = last_hash || nonce || token || step*/
-    unsigned char hashbuf[SPOW_HASHBYTES] = "";
-    memcpy(hashbuf + SPOW_H_LAST_HASH_OFF, last_hash, SPOW_H_LAST_HASH_LEN);
-    /* Skip nonce for now. */
-    memcpy(hashbuf + SPOW_H_TOKEN_OFF, config->token, SPOW_H_TOKEN_LEN);
-    const uint32_t step_be = pe_htobe32(step);
-    memcpy(hashbuf + SPOW_H_STEP_OFF, &step_be, SPOW_H_STEP_LEN);
+    /* hashbuf = last_hash || nonce || token || step */
+    hashbuf_t hashbuf;
+    memcpy(hashbuf.last_hash, last_hash, SPOW_HASH_SIZE);
+    hashbuf.nonce = 0;
+    memcpy(hashbuf.token, config->token, SPOW_TOKEN_SIZE);
+    hashbuf.step = pe_htobe32(step);
 
-    uint64_t *u64_hashbuf = (uint64_t *)hashbuf;
     uint64_t nonce = 0;
     for (; ; ++nonce) {
         /* Write nonce. */
-        u64_hashbuf[SPOW_H_NONCE_OFF_U64] = pe_htobe64(nonce);
-        /* Compute digest */
-        /* We use u64_hashbuf so that the compiler definitely sees the
-         * read *and* writes on it, even when it assumes
-         * strict non-aliasing (which we violate). */
-        gcry_md_hash_buffer(SPOW_HASH_ALGO, last_hash,
-            (unsigned char *)u64_hashbuf, SPOW_HASHBYTES);
+        hashbuf.nonce = pe_htobe64(nonce);
+        /* Compute digest. */
+        gcry_md_hash_buffer(SPOW_HASH_ALGO, last_hash, &hashbuf, SPOW_HASHBYTES);
         /* Are we done yet? */
         uint32_t relevant_digest = ((uint32_t *)last_hash)[0] & difficulty_mask;
         if (relevant_digest == 0) {
