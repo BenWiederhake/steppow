@@ -1,0 +1,13 @@
+x cpByte, g GHz → g / (136 * x)
+assuming SHA3-256 (1088 bits=136 bytes)
+10 cpByte, 4GHz → Can expect an upper bound of around 3000 KH/s
+60 cpByte, 1GHz → Can expect an upper bound of around 123 KH/s
+→ Single PoW token should take around 500 KH.
+"initial 10000 byte test took 57 ms" with SHA256
+Java gets to around 1.3 MH/s for msgs of length 36 with SHA-256
+    https://automationrhapsody.com/md5-sha-1-sha-256-sha-512-speed-performance/
+gcc/clang with gcrypt gets around 2200 KH/s
+log_2 reps \leq 2^(noncelen-difficulty) - 128
+    → "Always" possible (With prob 1 - 2^-128)
+    → noncelen-difficulty=7 is "always" sufficient
+Practical Hashrate on computer seems to be around 250-1000 KH/s
